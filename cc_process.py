@@ -4,11 +4,11 @@ import subprocess
 import requests
 import warcio
 import newspaper
-import itertools
+# import itertools
 import concurrent.futures
 
-import numpy as np
-import pandas as pd
+# import numpy as np
+# import pandas as pd
 
 from datetime import date, timedelta
 
@@ -44,9 +44,14 @@ def process_ccnews_file(url):
     """
     Requests and processes a CC-NEWS URL. Writes all articles that have a URL
     ending in '.nz' to a CSV. Returns a list of lists which includes info
-    about the articles in the downloaded '.warc.gz' file.
+    about the NZ articles in the downloaded '.warc.gz' file.
     """
-    print(f"Processing: {url.split('/')[-1]}")
+    fname_in = url.split('/')[-1]
+    print(f"Processing: {fname_in}")
+    # Skip if already processed
+    fname_out = f"ccnews-nz-{fname_in.replace('CC-NEWS-', '').replace('.warc.gz', '')}.csv"
+    fpath_out = os.path.join("processed_cc", fname_out)
+    if os.path.exists(fpath_out): return
     
     articles_list = []
     r = requests.get(url, stream=True)
@@ -96,25 +101,13 @@ def process_ccnews_file(url):
                 text
             ])
 
-    return articles_list
-
-
-def process_ccnews_files(urls):
-    """
-    Requests and processes a list[string] of CC-NEWS URLs. Writes all articles 
-    that have a URL ending in '.nz' to a CSV.
-    """
-    print(f"Processing {len(urls)} CC-NEWS URLs")
-    with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
-        articles_raw = list(executor.map(process_ccnews_file, urls))
-
-    # Flatten articles_raw to get list of lists
-    articles_list = list(itertools.chain.from_iterable(articles_raw))
-
-    articles_df = pd.DataFrame.from_records(articles_list,
-                                            columns = ['Datetime', 'URL', 'Text'])
-    
-    articles_df.to_csv('cc-nz-articles.csv', index=False)
+    # Save NZ articles to CSV
+#     articles_df = pd.DataFrame.from_records(articles_list,
+#                                             columns = ['Datetime', 'URL', 'Text'])
+#     articles_df.to_csv(fpath_out, index=False)
+    with open(fpath_out, 'w', newline="") as f:
+        writer = csv.writer(f)
+        writer.writerows(a)
 
     
 if __name__ == "__main__":
@@ -132,4 +125,6 @@ if __name__ == "__main__":
 #         writer.writerows(g)
         
     # Process multiple files
-    process_ccnews_files(ccnews_urls_subset)
+    print(f"Processing {len(ccnews_urls_subset)} CC-NEWS URLs")
+    with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
+        executor.map(process_ccnews_file, ccnews_urls_subset)
