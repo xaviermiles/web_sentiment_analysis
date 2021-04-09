@@ -109,9 +109,9 @@ if __name__ == "__main__":
     ccnews_urls = get_ccnews_urls()
     
     # Subset URLs based on dates
-    dates = get_date_range(date(2021, 3, 4), date(2021, 3, 6))
+    dates = get_date_range(date(2020, 1, 1), date(2021, 3, 6))
     ccnews_urls_subset = [url for url in ccnews_urls 
-                          for date in dates if date in url]
+                          for date in dates if "CC-NEWS-" + date in url]
     
     # Process one file (testing)
 #     g = process_ccnews_file(ccnews_urls_subset[0])
