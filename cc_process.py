@@ -4,11 +4,7 @@ import subprocess
 import requests
 import warcio
 import newspaper
-# import itertools
 import concurrent.futures
-
-# import numpy as np
-# import pandas as pd
 
 from datetime import date, timedelta
 
@@ -53,7 +49,9 @@ def process_ccnews_file(url):
     fpath_out = os.path.join("processed_cc", fname_out)
     if os.path.exists(fpath_out): return
     
-    articles_list = []
+    articles_list = [
+        ['Datetime', 'URL', 'Text']
+    ]
     r = requests.get(url, stream=True)
     
     for record in warcio.archiveiterator.ArchiveIterator(r.raw):
@@ -102,12 +100,9 @@ def process_ccnews_file(url):
             ])
 
     # Save NZ articles to CSV
-#     articles_df = pd.DataFrame.from_records(articles_list,
-#                                             columns = ['Datetime', 'URL', 'Text'])
-#     articles_df.to_csv(fpath_out, index=False)
     with open(fpath_out, 'w', newline="") as f:
         writer = csv.writer(f)
-        writer.writerows(a)
+        writer.writerows(articles_list)
 
     
 if __name__ == "__main__":
