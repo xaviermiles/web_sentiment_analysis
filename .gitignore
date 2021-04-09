@@ -1,3 +1,8 @@
+# Data files/folders
+cc-nz-articles-test.csv
+hedonometer_words.json
+processed_cc/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
