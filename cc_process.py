@@ -46,7 +46,7 @@ def process_ccnews_file(url):
     print(f"Processing: {fname_in}")
     # Skip if already processed
     fname_out = f"ccnews-nz-{fname_in.replace('CC-NEWS-', '').replace('.warc.gz', '')}.csv"
-    fpath_out = os.path.join("processed_cc", fname_out)
+    fpath_out = os.path.join("processed_ccnews", fname_out)
     if os.path.exists(fpath_out): return
     
     articles_list = [
