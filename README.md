@@ -10,7 +10,7 @@ The news articles are fed into GDELT Translingual to translate 65 languages into
 
 The data is recorded in 15-minute batches, which seem to be published/available within about five minutes.
 
-## Data Retrieval
+### Data Retrieval
 Methods to retrieve this data: Google BigQuery, raw data files, gdeltPyR Python package.
 
 Google BigQuery is a “serverless data analytics platform” which uses SQL syntax and charges for running queries. The GKG dataset is about 12.7 TB and is included as a publicly available dataset on BigQuery. BigQuery charges $5 / TB for on-demand pricing, and $1700-2000 / month for 100 “slots” of processing capacity (it is not clear how many slots would be necessary to handle 12.7 TB relatively quickly).
@@ -19,7 +19,7 @@ The GKG raw data files are zipped tab-delimited files (.csv.zip extensions) that
 
 The gdeltPyR Python package offers a simple interface to request the GKG dataset (and the other GDELT datasets). This works by creating parallel HTTP GET requests to the raw data files, so it tends to be very quick. The requests are restricted to entire days (ie. specifying dates NOT datetimes), but every 15-minute batch for the specified dates are returned. If requesting up to the current date, then it will return the dataset up to the latest 15-minute batch. It will print a warning message for invalid URLs (datetimes for which GDELT is missing data) or if no data is returned by a valid URL (not sure why this happens).
 
-# Data Structure (raw data files)
+### Data Structure (raw data files)
 These are tab-delimited files with each line corresponding to a published article. The information/variables included in each of these is explained fully in http://data.gdeltproject.org/documentation/GDELT-Global_Knowledge_Graph_Codebook-V2.pdf.
 
 The most important variables are
@@ -29,7 +29,7 @@ The most important variables are
 •	V1.5TONE (16th field) – six core emotional dimensions. (This has comma-delimited floating point numbers.) This reflects the emotional tone of the text (e.g. how positive it is, how emotionally charged it is) using GDELTs inbuilt sentiment analysis. This is “designed to offer a general-purpose tone indicator”, but it is not made clear what algorithms/processes are used to derive it. 
 •	V2GCAM (18th field) – the result of the GCAM system being run on the text. (See next section for explanation of structure.) This reflects what sentiments/themes are included in the text using a variety of references.
 
-## V2GCAM Structure (raw data files)
+### V2GCAM Structure (raw data files)
 (This has comma-delimited blocks, and colon-delimited key/value pairs.)
 
 The first entry is always the word count eg. “wc:345” means there is 345 words in the article.
