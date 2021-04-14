@@ -1,4 +1,4 @@
-# c19-sentiment-analysis
+# COVID19 SENTIMENT ANALYSIS DOCS
 
 
 ## GDELT - Global Knowledge Graph
@@ -64,6 +64,36 @@ GKG is provided in 15-minute batches, while GEG is provided in 1-minute batches.
 
 Note from Intro to GEG webpage: _“Note that the URLs found within a given 15-minute file historically have aligned with those found in the GKG for the same period (though representing just a small subsample of them), but in future this will be increasingly decoupled as GDELT 3.0 launches, meaning that analyses looking across both GKG and GEG annotations will need to use a rolling window to match them.”_
 
+
+## Common Crawl
+This is a Amazon dataset hosted in a public S3 bucket, but can also be retrieved via HTTPS links. Downloading from the HTTPS links means that the g-zipped files can be accessed without an AWS setup, but will lose the benefits of complimentary AWS services. 
+
+The _cc_process.py_ script supports retrieval of both the original dataset (CC-MAIN) and the subset which only includes news articles (CC-NEWS). This script extracts the scraped webpages with nz top-level domain (e.g. ".co.nz" or ".org.nz") by downloading the CC datasets using HTTPS links and then searching the WARC files for the relevant webpages, extracting these webpage's text, and saving this information to CSV files (along with the publish-datetime and webpage's URL). There is a separate CSV file produced for each '.warc.gz' file. This process works okay for CC-NEWS as this dataset is small-to-medium size (\~6,500 files for Jan 2020-Feb 2021), but is infeasible for CC-MAIN due the number of files required to be downloaded (\~700,000 files for Jan 2020-Feb 2021). During initial testing in the AWS environment, it seemed like it took _cc_process.py_ about 30 minutes per 100 files, so processing Jan 2020-Feb 2021 would take about 34 hours for CC-NEWS and about 150 days for CC-MAIN. Each '.warc.gz' file is 1 GB (before unzipping).
+
+A more efficient process would send the query to the data contained in the S3 bucket and only download the NZ webpages, since this would reduce the amount of data required to be downloaded and may provide more efficient processing. The two main options for querying data in S3 buckets is _S3 Select_ and _Amazon Athena_. Both:
+
+- allow SQL-style queries to CSV, JSON or [Parquet](https://databricks.com/glossary/what-is-parquet) datasets.
+- support compressed files. S3 Select: GZIP, BZIP2. Amazon Athena: GZIP, SNAPPY, ZLIB, LZO, BZIP2.
+
+S3 Select is more designed for ad hoc queries and Athena is designed more for big data, so Athena will likely incur larger costs (and require activation). Either could be used for the commoncrawl files as these are stored in the public S3 bucket _commoncrawl_ in GZIP-ed Parquet format. __It seems like S3 Select should be sufficiently powerful for this use-case.__
+
+### CC-MAIN Directory Structure
+The complete data structure is described at https://commoncrawl.org/the-data/get-started/.
+
+.warc = Web ARChive format. Used to store scraped information from webpages. These are gzipped (compressed) before being stored in the _commoncrawl_ S3 bucket.
+
+The '.warc.gz' files are released in batches about every 5 weeks. The batches are listed at https://index.commoncrawl.org/collinfo.json and use the naming convention CC-MAIN-YYYY-WW (YYYY = year, WW = week number). The paths for the .warc.gz files which contain the scraped information in each batch can be found at https://commoncrawl.s3.amazonaws.com/{BATCH_NAME}/warc.paths.gz or s3://commoncrawl/{BATCH_NAME}/warc.paths.gz. For example, the paths for the .warc.gz files in the CC-MAIN-2021-10 batch is available at https://commoncrawl.s3.amazonaws.com/CC-MAIN-2021-10/warc.paths.gz or s3://commoncrawl/CC-MAIN-2021-10/warc.paths.gz.
+
+An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz OR 
+s3://commoncrawl/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz. This is the first file in the _CC-MAIN-2021-10_ batch and contains 44,408 scraped webpages, of which 98 have URLs with '.nz' as their top-level domain.
+
+## CC-NEWS Directory Structure
+Information about this dataset can be found at https://commoncrawl.org/2016/10/news-dataset-available/.
+
+The '.warc.gz' files are released every hour or two, which usually results in 1 GB files.
+The individual files are available at https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/YYYY/MM/ or s3://commoncrawl/crawl-data/CC-NEWS/YYYY/MM/ (with YYYY = year, MM = month).
+
+An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz or s3://commoncrawl/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz. This is the first file for January 2021 and contains 34,277 scraped webpages, of which 58 have URLs with '.nz' as their top-level domain.
 
 ## Hedonometer
 The main implementation is at http://hedonometer.org/, which provides a daily index of the positivity of people’s tweets (Twitter). This is informed by the Twitter Decahose API, which provides a 10% random sample of all posts on Twitter (approx. 50 million tweets per day in 100GB of raw JSON).  The daily score reflects which words are being use most (about 200 million unique per day) and their associated positivity, and is constructed using a bag-of-words model. More formally, the weighted average level of happiness for a given text T is calculated as
