@@ -87,7 +87,7 @@ The '.warc.gz' files are released in batches about every 5 weeks. The batches ar
 An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz OR 
 s3://commoncrawl/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz. This is the first file in the _CC-MAIN-2021-10_ batch and contains 44,408 scraped webpages, of which 98 have URLs with '.nz' as their top-level domain.
 
-## CC-NEWS Directory Structure
+### CC-NEWS Directory Structure
 Information about this dataset can be found at https://commoncrawl.org/2016/10/news-dataset-available/.
 
 The '.warc.gz' files are released every hour or two, which usually results in 1 GB files.
