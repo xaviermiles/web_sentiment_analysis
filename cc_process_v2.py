@@ -1,14 +1,5 @@
-"""
-The original cc_process script supports retrieval of both CC-MAIN and CC-NEWS.
-Since this uses the columnar index, which only supports CC-MAIN, this V2
-script only supports retrieval of CC-MAIN.
-
-This should be faster than the original by utilising Amazon S3 Select to search
-for relevant webpages (ie. top-level domain=.nz), and then extracting the HTML
-for these from the appropriate locations in the WARC files.
-"""
-
 import boto3
+import botocore
 import subprocess
 import json
 import gzip
@@ -27,29 +18,34 @@ def get_parquet_keys(crawl_batch):
 
 
 def process_parquet_key(key, s3_client):
-    parquet_fname = key.split('/')[-1]
-    print("Processing:", parquet_fname)
+#     parquet_fname = key.split('/')[-1]
+#     print("Processing:", parquet_fname)
     
     sql_str = """
         SELECT * FROM S3Object s
-        limit 10
+        WHERE s.url_host_tld='nz'
     """
+    # SELECT * FROM S3Object s
     # WHERE s.url_host_tld='nz'
+    # LIMIT 10
     
     resp = s3_client.select_object_content(
         Bucket='commoncrawl',
         Key=key,
         Expression=sql_str,
         ExpressionType='SQL',
+#         ScanRange={'Start': 0, 'End': 100}  # 568810772
         InputSerialization={'Parquet': {}},
         OutputSerialization={'JSON': {}}
     )
-
+    
+    info = []
     end_event_received = False
     for event in resp['Payload']:
         if 'Records' in event:
             payload = event['Records']['Payload'].decode()
-            info = payload.split('\n')[:-1]
+            info += payload.split('\n')[:-1]
+            print("Records:", len(info))
         elif 'End' in event:
             end_event_received = True
 
@@ -90,7 +86,10 @@ def process_idx_ref(idx_ref_str, s3_client):
     # Get text from HTML
     article = newspaper.Article(url='')
     article.set_html(html_contents)
-    article.parse()
+    try:
+        article.parse()
+    except:
+        print(html_start, html_end, html_contents)
     text = article.text
     # Exclude webpage if newspaper3k package cannot parse any text
     if text == "": return
@@ -99,6 +98,7 @@ def process_idx_ref(idx_ref_str, s3_client):
     
 
 def process_batch(crawl_batch, s3_client):
+    print(f"On batch: {crawl_batch}")
     parquet_keys = get_parquet_keys(batch)
     
     full_parquet_keys = [
@@ -106,15 +106,36 @@ def process_batch(crawl_batch, s3_client):
         for key in parquet_keys
     ]
     
-    idx_refs = []
-    for key in full_parquet_keys[:2]:
-        idx_refs += process_parquet_key(key, s3_client)
+    idx_ref_strs = []
+    fails = 0
+    subset_parquet_keys = full_parquet_keys
+    for key in subset_parquet_keys:
+#         print("Processed: ", key.split('/')[-1])
+#         idx_ref_strs += process_parquet_key(key, s3_client)
+        
+        try:
+            new_info = process_parquet_key(key, s3_client)
+            idx_ref_strs += new_info
+            print(f"Processed ({len(new_info)}):  {key.split('/')[-1]}")
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'OverMaxParquetBlockSize':
+                print(f"FAILED (OMPBS): {key.split('/')[-1]}")
+                fails += 1
+            else:
+                print(f"Unexpected error: {e}")
+        except ConnectionResetError as e:
+            print(f"FAILED (CRE):   {key.split('/')[-1]}")
+            fails += 1
     
     infos = []
-    for x in idx_refs:
-        infos.append(process_idx_ref(idx_refs, s3_client))
+    for x in idx_ref_strs:
+        infos.append(process_idx_ref(x, s3_client))
+    
+    good_infos = list(filter(None, infos))  # removes None entries
         
-    print(infos)
+    print()
+    print("Number of unique articles:", len(good_infos))
+    print(f"Failed Parquet files: {fails} / {len(subset_parquet_keys)}")
 
     
 if __name__ == "__main__":
@@ -123,4 +144,3 @@ if __name__ == "__main__":
     
     batch = "CC-MAIN-2021-10"
     process_batch(batch, s3)
-    
