@@ -1,8 +1,11 @@
 # Data files/folders
-cc-nz-articles-test.csv
-hedonometer_words.json
-processed_ccnews/
-processed_ccmain/
+commoncrawl/cc-nz-articles-test.csv
+commoncrawl/hedonometer_words.json
+commoncrawl/processed_ccnews/
+commoncrawl/processed_ccmain/
+
+Gdelt/processed_gdelt2/
+Gdelt/gdelt2_master.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
