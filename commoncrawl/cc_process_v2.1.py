@@ -1,10 +1,12 @@
-import botocore, boto3
 import os, subprocess
 import csv, json, gzip
+import concurrent.futures, itertools
+
+import botocore, boto3
 import warcio
 import newspaper
-import concurrent.futures
-import itertools, collections
+
+from datetime import datetime
 
 
 def create_logfile(crawl_batch):
@@ -13,7 +15,7 @@ def create_logfile(crawl_batch):
     """
     fpath = os.path.join("logs", crawl_batch + ".txt")
     with open(fpath, 'w') as f:
-        f.write(crawl_batch + " LOGS \n")
+        f.write(crawl_batch + " LOGS \n\n")
 
 
 def add_to_logfile(crawl_batch, message):
@@ -21,6 +23,21 @@ def add_to_logfile(crawl_batch, message):
     with open(fpath, 'a') as f:
         f.write(message + "\n")
     print(message)
+    
+    
+def get_ccmain_batches(years):
+    """
+    Return list[string] of all CC-Main batches in the given years
+    """
+    print(f"Fetching CCMAIN URLs for years: {years}")
+    index = subprocess.check_output(["aws", "s3", "ls", "--no-sign-request", 
+                                     "s3://commoncrawl/cc-index/table/cc-main/warc/"])
+    index = [x.split("crawl=")[1] for x in index.decode().split('\n')[:-1]]
+    
+    # Subselect based on years provided
+    index_subset = [i for i in index if i.split('-')[2] in years]
+    
+    return index_subset
 
 
 def get_parquet_keys(crawl_batch):
@@ -87,12 +104,18 @@ def process_parquet_key(crawl_batch, key):
     # Returns None if any Errors thrown
     
     
-def process_index_str(idx_ref_str, s3_client):
+def process_index_str(idx_ref_str, crawl_batch):
     """
     idx_ref_str: Index Reference String, a string corresponding to a single
         entry in the CC columnar index (parquet files)
     """
-    idx_ref = json.loads(idx_ref_str)
+    s3_client = boto3.session.Session(profile_name="xmiles").client('s3')
+    
+    try:
+        idx_ref = json.loads(idx_ref_str)
+    except:
+        # string is not able to be compiled into a dictionary
+        return
     url = idx_ref['url']
     fetch_time = idx_ref['fetch_time']
     
@@ -111,7 +134,7 @@ def process_index_str(idx_ref_str, s3_client):
         warc_contents = gzip.decompress(warc_subset['Body'].read()[:-1]).decode()
     except:
         # Exclude webpage if WARC contents cannot be decoded
-        print("Cannot decode:", idx_ref['url'])
+        add_to_logfile(crawl_batch, "Cannot decode:", idx_ref['url'])
         return
     
     # Extract HTML from WARC contents
@@ -127,7 +150,7 @@ def process_index_str(idx_ref_str, s3_client):
     try:
         article.parse()
     except:
-        print("Cannot parse:", idx_ref['url'])
+        print(crawl_batch, "Cannot parse:", idx_ref['url'])
         return
     text = article.text
     # Exclude webpage if newspaper3k package cannot parse any text
@@ -137,7 +160,6 @@ def process_index_str(idx_ref_str, s3_client):
     
 
 def process_batch(crawl_batch):
-    print(f"On batch: {crawl_batch}")
     outfolder = os.path.join("ccindex_nz", crawl_batch)
     if not os.path.exists(outfolder):
         os.makedirs(outfolder)
@@ -148,7 +170,7 @@ def process_batch(crawl_batch):
         for subkey in parquet_subkeys
     ]
     
-    subset_parquet_keys = parquet_keys[100:110]
+    subset_parquet_keys = parquet_keys#[100:110]  # ALL
     num_parquet_keys = len(subset_parquet_keys)
     print(f"Processing {num_parquet_keys} Parquet files")
     with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
@@ -162,14 +184,17 @@ def process_batch(crawl_batch):
     valid_parquet_idxs_flat = list(itertools.chain.from_iterable(valid_parquet_idxs))
     
     num_webpages = len(valid_parquet_idxs_flat)
-    print(f"\nProcessing {num_webpages} webpages")
+    add_to_logfile(crawl_batch, f"\nProcessing {num_webpages} webpages")
+    start = datetime.now()
     with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
         output = list(
-            executor.map(process_index_str, valid_parquet_idxs_flat)
+            executor.map(process_index_str, valid_parquet_idxs_flat, itertools.repeat(crawl_batch))
         )
+    end = datetime.now()
+    add_to_logfile(crawl_batch, "Processing took " + str(end - start))
 
     headers = ["Datetime", "URL", "Text"]
-    good_output = headers + list(filter(None, output))
+    good_output = [headers] + list(filter(None, output))
     with open(crawl_batch + "_NZ.csv", "w") as f:
         writer = csv.writer(f)
         writer.writerows(good_output)
@@ -180,13 +205,17 @@ def process_batch(crawl_batch):
     num_fails = len([x for x in parquet_idxs if x is None])
     add_to_logfile(crawl_batch,
                    f"\nNumber of '.nz' webpages: {num_webpages}\n"
-                   f"Failed '.nz' webpages: {num_fail_webpages}"
+                   f"Failed '.nz' webpages: {num_fail_webpages}\n"
                    f"Number of Parquet files with '.nz' webpages: {num_parquet_with_nz} / {num_parquet_keys}\n"
                    f"Failed Parquet files: {num_fails} / {num_parquet_keys}")
 
     
-if __name__ == "__main__":
-    
+if __name__ == "__main__":    
     batch = "CC-MAIN-2021-10"
     create_logfile(batch)
     process_batch(batch)
+    
+#     batches_20_and_21 = get_ccmain_batches(["2020", "2021"])
+#     for batch in batches_20_and_21:
+#         create_logfile(batch)
+#         process_batch(batch)
