@@ -1,8 +1,6 @@
-import boto3
-import botocore
-import subprocess
-import json
-import gzip
+import botocore, boto3
+import os, subprocess
+import csv, json, gzip
 import warcio
 import newspaper
 
@@ -25,16 +23,12 @@ def process_parquet_key(key, s3_client):
         SELECT * FROM S3Object s
         WHERE s.url_host_tld='nz'
     """
-    # SELECT * FROM S3Object s
-    # WHERE s.url_host_tld='nz'
-    # LIMIT 10
     
     resp = s3_client.select_object_content(
         Bucket='commoncrawl',
         Key=key,
         Expression=sql_str,
         ExpressionType='SQL',
-#         ScanRange={'Start': 0, 'End': 100}  # 568810772
         InputSerialization={'Parquet': {}},
         OutputSerialization={'JSON': {}}
     )
@@ -45,7 +39,6 @@ def process_parquet_key(key, s3_client):
         if 'Records' in event:
             payload = event['Records']['Payload'].decode()
             info += payload.split('\n')[:-1]
-            print("Records:", len(info))
         elif 'End' in event:
             end_event_received = True
 
@@ -55,7 +48,23 @@ def process_parquet_key(key, s3_client):
     return info
 
 
-def process_idx_ref(idx_ref_str, s3_client):
+def get_index_strs(parquet_key, s3_client):
+    try:
+        index_str = process_parquet_key(parquet_key, s3_client)
+        print(f"Processed ({len(index_str)}):  {key.split('/')[-1]}")
+        return index_str
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == 'OverMaxParquetBlockSize':
+            print(f"FAILED (OMPBS): {parquet_key.split('/')[-1]}")
+#             fails += 1
+        else:
+            print(f"Unexpected error: {e}")
+    except ConnectionResetError as e:
+        print(f"FAILED (CRE):   {parquet_key.split('/')[-1]}")
+#         fails += 1
+            
+
+def process_index_str(idx_ref_str, s3_client):
     """
     idx_ref_str: Index Reference String, a string corresponding to a single
         entry in the CC columnar index (parquet files)
@@ -94,11 +103,15 @@ def process_idx_ref(idx_ref_str, s3_client):
     # Exclude webpage if newspaper3k package cannot parse any text
     if text == "": return
     
-    return fetch_time, url, text
+    return [fetch_time, url, text]
     
 
 def process_batch(crawl_batch, s3_client):
     print(f"On batch: {crawl_batch}")
+    outfolder = os.path.join("ccindex_nz", crawl_batch)
+    if not os.path.exists(outfolder):
+        os.makedirs(outfolder)
+    
     parquet_keys = get_parquet_keys(batch)
     
     full_parquet_keys = [
@@ -106,36 +119,40 @@ def process_batch(crawl_batch, s3_client):
         for key in parquet_keys
     ]
     
-    idx_ref_strs = []
-    fails = 0
-    subset_parquet_keys = full_parquet_keys
-    for key in subset_parquet_keys:
-#         print("Processed: ", key.split('/')[-1])
-#         idx_ref_strs += process_parquet_key(key, s3_client)
+    parquet_fails = 0
+    index_ref_strs = []
+    for full_key in full_parquet_keys[107:109]:
+        fname = full_key.split('/')[-1].replace('.gz.parquet', '.txt')
+        fpath = os.path.join(outfolder, fname)
+        if os.path.exists(fpath):
+            with open(fpath, 'r') as f:
+                new_index_strs = [index_str.rstrip() for index_str in f.readlines()]
+        else:
+            new_index_strs = get_index_strs(full_key, s3_client)
+            # returns None if no '.nz' indices
         
-        try:
-            new_info = process_parquet_key(key, s3_client)
-            idx_ref_strs += new_info
-            print(f"Processed ({len(new_info)}):  {key.split('/')[-1]}")
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == 'OverMaxParquetBlockSize':
-                print(f"FAILED (OMPBS): {key.split('/')[-1]}")
-                fails += 1
-            else:
-                print(f"Unexpected error: {e}")
-        except ConnectionResetError as e:
-            print(f"FAILED (CRE):   {key.split('/')[-1]}")
-            fails += 1
-    
-    infos = []
-    for x in idx_ref_strs:
-        infos.append(process_idx_ref(x, s3_client))
-    
-    good_infos = list(filter(None, infos))  # removes None entries
+        if new_index_strs is None:
+            continue
         
+        index_ref_strs += new_index_strs
+        with open(fpath, 'w') as f:
+            f.writelines(f"{index_str}\n" for index_str in new_index_strs)
+    
+#     output = []
+#     for x in idx_ref_strs:
+#         output.append(process_index_str(x, s3_client))
+    
+#     good_output = list(filter(None, output))  # removes None entries
+    
+#     #
+#     with open("ccmain-test.csv", "w") as f:
+#         writer = csv.writer(f)
+#         writer.writerows(good_output)
+    
+    # Print out summary
     print()
-    print("Number of unique articles:", len(good_infos))
-    print(f"Failed Parquet files: {fails} / {len(subset_parquet_keys)}")
+    print("Number of unique articles:", len(good_output))
+    print(f"Failed Parquet files: {parquet_fails} / {len(subset_parquet_keys)}")
 
     
 if __name__ == "__main__":

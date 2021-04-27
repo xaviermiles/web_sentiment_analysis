@@ -66,16 +66,38 @@ Note from Intro to GEG webpage: _“Note that the URLs found within a given 15-m
 
 
 ## Common Crawl
-This is a Amazon dataset hosted in a public S3 bucket, but can also be retrieved via HTTPS links. Downloading from the HTTPS links means that the g-zipped files can be accessed without an AWS setup, but will lose the benefits of complimentary AWS services. 
+This is a Amazon dataset hosted in a public S3 bucket, but can also be retrieved via HTTPS links. Downloading from the HTTPS links means that the g-zipped files can be accessed without an AWS setup, but will lose the benefits of complimentary AWS services. The main dataset (CC-MAIN) also contains a sub-dataset (CC-NEWS) which includes only scraped webpages which are news articles.
 
 The _cc_process.py_ script supports retrieval of both the original dataset (CC-MAIN) and the subset which only includes news articles (CC-NEWS). This script extracts the scraped webpages with nz top-level domain (e.g. ".co.nz" or ".org.nz") by downloading the CC datasets using HTTPS links and then searching the WARC files for the relevant webpages, extracting these webpage's text, and saving this information to CSV files (along with the publish-datetime and webpage's URL). There is a separate CSV file produced for each '.warc.gz' file. This process works okay for CC-NEWS as this dataset is small-to-medium size (\~6,500 files for Jan 2020-Feb 2021), but is infeasible for CC-MAIN due the number of files required to be downloaded (\~700,000 files for Jan 2020-Feb 2021). During initial testing in the AWS environment, it seemed like it took _cc_process.py_ about 30 minutes per 100 files, so processing Jan 2020-Feb 2021 would take about 34 hours for CC-NEWS and about 150 days for CC-MAIN. Each '.warc.gz' file is 1 GB (before unzipping).
 
-A more efficient process would send the query to the data contained in the S3 bucket and only download the NZ webpages, since this would reduce the amount of data required to be downloaded and may provide more efficient processing. The two main options for querying data in S3 buckets is _S3 Select_ and _Amazon Athena_. Both:
+A more efficient process sends querys to data contained in the S3 bucket and only download the NZ webpages, since this would reduce the amount of data required to be downloaded and may provide more efficient processing. (This process does not work for CC-NEWS.) This process queries the Parquet index files to find where in the WARC files contains '.nz' webpages and then only downloads these parts of the WARC files.
 
-- allow SQL-style queries to CSV, JSON or [Parquet](https://databricks.com/glossary/what-is-parquet) datasets.
-- support compressed files. S3 Select: GZIP, BZIP2. Amazon Athena: GZIP, SNAPPY, ZLIB, LZO, BZIP2.
+The two main options for querying data in S3 buckets is _S3 Select_ and _Amazon Athena_. Both allow SQL-style queries to CSV, JSON, or [Parquet](https://databricks.com/glossary/what-is-parquet) datasets, 
+which can be stored in a compressed format (GZIP typically recommended). Differences:
+- Big Picture: S3 Select is more designed for ad hoc queries and Athena is designed more for big data
+- Athena will incur larger costs and required activation
+- Athena can perform queries on a collection of files (ie. an entire folder) whereas S3 Select sends a query to an individual file. This limitation of S3 Select can be overcome with for-loops but complicates the code.
+- S3 Select requires that “The maximum uncompressed row group size is 256MB”. **This is not always satisfied for the CC-MAIN index files which this means that some of the files cannot be processed using S3 Select (rough estimate = 25-33% will unable to be processed).**
 
-S3 Select is more designed for ad hoc queries and Athena is designed more for big data, so Athena will likely incur larger costs (and require activation). Either could be used for the commoncrawl files as these are stored in the public S3 bucket _commoncrawl_ in GZIP-ed Parquet format. __It seems like S3 Select should be sufficiently powerful for this use-case.__
+For the 2020-10 CC-MAIN batch there is about 300 index files. The '.nz' webpages seem to be extremely concentrated within a few index files; most index files contain zero '.nz' webpages while part-00108 contains 2.1 million '.nz' webpages. There does not seem to be any documentation about how the indices are batched into the 300 files, so there is no (current) way to predict which index files contain '.nz' articles. The index files for this batch make up 202.8 GiB  of data, which can be found by running (AWS CLI):
+```
+aws s3 ls commoncrawl/cc-index/table/cc-main/warc/crawl=CC-MAIN-2020-10/subset=warc/ --recursive --human-readable --summarize --no-sign-request
+```
+
+The best way to see if many webpages have been missed is by looking at the number of articles over time and then maybe comparing this to the number of news articles in GDELT over time. We will not truly know how many '.nz' articles we are missing when using S3 Select:
+- worst-case scenario: all of them. This would be obvious since there would be a large gap in the data, but there would be no way to remedy this using S3 Select.
+- best-case scenario: none of them.
+- average-case scenario: ??
+
+NB: GDELT collection method takes all news articles which _mention_ New Zealand, where commoncrawl collection method takes all webpages which use New Zealand top-level domain (.nz).
+
+### CC-NEWS Directory Structure
+Information about this dataset can be found at https://commoncrawl.org/2016/10/news-dataset-available/.
+
+The '.warc.gz' files are released every hour or two, which usually results in 1 GB files.
+The individual files are available at https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/YYYY/MM/ or s3://commoncrawl/crawl-data/CC-NEWS/YYYY/MM/ (with YYYY = year, MM = month).
+
+An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz or s3://commoncrawl/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz. This is the first file for January 2021 and contains 34,277 scraped webpages, of which 58 have URLs with '.nz' as their top-level domain.
 
 ### CC-MAIN Directory Structure
 The complete data structure is described at https://commoncrawl.org/the-data/get-started/.
@@ -86,14 +108,6 @@ The '.warc.gz' files are released in batches about every 5 weeks. The batches ar
 
 An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz OR 
 s3://commoncrawl/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz. This is the first file in the _CC-MAIN-2021-10_ batch and contains 44,408 scraped webpages, of which 98 have URLs with '.nz' as their top-level domain.
-
-### CC-NEWS Directory Structure
-Information about this dataset can be found at https://commoncrawl.org/2016/10/news-dataset-available/.
-
-The '.warc.gz' files are released every hour or two, which usually results in 1 GB files.
-The individual files are available at https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/YYYY/MM/ or s3://commoncrawl/crawl-data/CC-NEWS/YYYY/MM/ (with YYYY = year, MM = month).
-
-An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz or s3://commoncrawl/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz. This is the first file for January 2021 and contains 34,277 scraped webpages, of which 58 have URLs with '.nz' as their top-level domain.
 
 ## Hedonometer
 The main implementation is at http://hedonometer.org/, which provides a daily index of the positivity of people’s tweets (Twitter). This is informed by the Twitter Decahose API, which provides a 10% random sample of all posts on Twitter (approx. 50 million tweets per day in 100GB of raw JSON).  The daily score reflects which words are being use most (about 200 million unique per day) and their associated positivity, and is constructed using a bag-of-words model. More formally, the weighted average level of happiness for a given text T is calculated as
