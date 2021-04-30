@@ -13,9 +13,9 @@ The data is recorded in 15-minute batches, which seem to be published/available 
 ### Data Retrieval
 Methods to retrieve this data: Google BigQuery, raw data files, gdeltPyR Python package.
 
-Google BigQuery is a “serverless data analytics platform” which uses SQL syntax and charges for running queries. The GKG dataset is about 12.7 TB and is included as a publicly available dataset on BigQuery. BigQuery charges $5 / TB for on-demand pricing, and $1700-2000 / month for 100 “slots” of processing capacity (it is not clear how many slots would be necessary to handle 12.7 TB relatively quickly).
+Google BigQuery is a “serverless data analytics platform” which uses SQL syntax and charges for running queries. The GKG dataset is about 12.7 TB and is included as a publicly available dataset on BigQuery. BigQuery charges 5 USD/TB for on-demand pricing, and 2000 USD/month for 100 “slots” of processing capacity (it is not clear how many slots would be necessary to handle 12.7 TB relatively quickly).
 
-The GKG raw data files are zipped tab-delimited files (.csv.zip extensions) that can be downloaded from HTTP URL sites. The list of all available files from GDELT is included at http://data.gdeltproject.org/gdeltv2/masterfilelist.txt. The structure of the GKG file sites is http:///data.gdeltproject.org/gdeltv2/YYYYMMDDHHMMSS.gkg.csv.zip (using 24-hour date-time), and these are aggregated into 15-minute batches. For example, a GKG batch generated at 3:30PM on 03 February 2020 could be retrieved from http:///data.gdeltproject.org/gdeltv2/20200203153000.gkg.csv.zip.
+The GKG raw data files are zipped tab-delimited files (.csv.zip extensions) that can be downloaded from HTTP URL sites. The list of all available files from GDELT is included at http://data.gdeltproject.org/gdeltv2/masterfilelist.txt. The structure of the GKG file sites is http://data.gdeltproject.org/gdeltv2/YYYYMMDDHHMMSS.gkg.csv.zip (using 24-hour date-time), and these are aggregated into 15-minute batches. For example, a GKG batch generated at 3:30PM on 03 February 2020 could be retrieved from http://data.gdeltproject.org/gdeltv2/20200203153000.gkg.csv.zip.
 
 The gdeltPyR Python package offers a simple interface to request the GKG dataset (and the other GDELT datasets). This works by creating parallel HTTP GET requests to the raw data files, so it tends to be very quick. The requests are restricted to entire days (ie. specifying dates NOT datetimes), but every 15-minute batch for the specified dates are returned. If requesting up to the current date, then it will return the dataset up to the latest 15-minute batch. It will print a warning message for invalid URLs (datetimes for which GDELT is missing data) or if no data is returned by a valid URL (not sure why this happens).
 
@@ -131,3 +131,34 @@ The overall happiness score ignores words which have a happiness score between 4
 The main indicator of public sentiment is the _Time Series of Happiness_, which is informed by posts on Twitter. There are other related projects on the site: _Happiness of Stories_ which is informed by books and movies, _Happiness of the News_ which is informed by the New York Times and CBS, and _Happiness of Outside_ which reflects a collection of articles on a blogging site about outdoor activities. These projects all present per word average happiness shift between two bodies of text (e.g. newspaper section, article), and do not include time series plots. The authors are strong proponents of the word shift presentation, as it allows for more information about why sentiment has changed between two time periods (or bodies of text). 
 
 The NZ news sentiment lineplot/visualisation could include these word shifts as additional information like how hedonometer presents these as overlays. For a given day, the hedonometer uses these word shifts to show any words which are being used significantly more or less than the previous week. The hedonometer also uses Wikipedia to automatically detect important/significant events on any given day.
+
+## Twitter API
+There is two versions of the Twitter API: v1.1 and v2 ([full documentation](https://developer.twitter.com/en/docs/twitter-api/rate-limits)). The new version (v2) was released Aug 2020 and is _Early Access_ since Twitter has not implemented all the types of users/plans. The (rough) timeline for completely replacing v1.1 with v2 can be found [here](https://developer.twitter.com/en/products/twitter-api/early-access/guide#rollingout).
+
+### Can Stats NZ use this?
+When signing up for an "Individual developer account" there are some screening questions before the account can be approved. It is not clear what would prevent an account from being approved (ie. whether Stats NZ would be allowed). These were (paraphrased):
+- General intended use
+- How would you analyze Twitter data?
+- Tweet, retweet or like? (Which parts of the data/API will you use?)
+- Will you show Tweets or Twitter information off Twitter?
+- **Will you be providing Tweets or Twitter information to government entites?**
+
+The questions for the other types of developer accounts are likely similar to these.
+
+**Also, Twitter has [restrictions when using the Twitter APIs](https://developer.twitter.com/en/developer-terms/more-on-restricted-use-cases) which include deriving/inferring sensitive information about Twitter uses, matching a Twitter account with an "off-Twitter identifier", and the redistribution of downloaded Twitter content.**
+
+### Plans
+API v1.1 has standard (free), premium and enterprise account types. The full details for standard and premium can be found [here](https://developer.twitter.com/en/pricing/search-fullarchive) or seen below. Signing up for the enterprise plan (and getting details of what the plan offers) requires contacting Twitter. The standard and premium plans allowing querying the full Twitter archives, but the standard plan is limited to 50 requests/month as it is the free option. The premium option is priced depending on the number of total request per month, starting with 99 USD for "Up to 100" requests and ending with 1,899 USD for "Up to 2,500" requests (look in link above for intermediate pricing).
+
+Package                | Standard/Sandbox                    | Premium
+:--------------------- | ----------------------------------- | --------------------------------------
+Rate limit             | 30 requests/min AND 10 requests/sec | 60 requests/min AND 10 requests/sec
+Tweets per request     | 100                                 | 500
+Effective Tweets limit | 3000 tweets/min AND 1000 tweets/min | 30,000 tweets/min AND 5,000 tweets/min
+
+API v2 has standard (free) and academic research account types. The free tier only allows the retrieval of Tweets within the previous week, while the academic tier has access to the full Twitter archive.
+
+### Retrieving NZ Tweets from 2020 onwards
+API v1.1 has the "geocode" operator which can be used to return Tweets within a given radius of a given latitude-longitude coordinate. This could be used (with a few different circles) to get Tweets from New Zealand. From brief testing, this seems to be limited to Tweets within the last week, but [this page](https://developer.twitter.com/en/pricing/search-fullarchive) implies that there is a way to access the full archives.
+
+Any location-related operators in API v2 require an academic research account. The location operators can be used to request Tweets that are: tagged with a specific location name (place), from a given country (place_country) or are within two types of latitude-longitude areas (point_radius, bounding_box). Also, using v2 to search for Tweets before a week ago requires an academic research account.
