@@ -13,9 +13,9 @@ The data is recorded in 15-minute batches, which seem to be published/available 
 ### Data Retrieval
 Methods to retrieve this data: Google BigQuery, raw data files, gdeltPyR Python package.
 
-Google BigQuery is a “serverless data analytics platform” which uses SQL syntax and charges for running queries. The GKG dataset is about 12.7 TB and is included as a publicly available dataset on BigQuery. BigQuery charges $5 / TB for on-demand pricing, and $1700-2000 / month for 100 “slots” of processing capacity (it is not clear how many slots would be necessary to handle 12.7 TB relatively quickly).
+Google BigQuery is a “serverless data analytics platform” which uses SQL syntax and charges for running queries. The GKG dataset is about 12.7 TB and is included as a publicly available dataset on BigQuery. BigQuery charges 5 USD/TB for on-demand pricing, and 2000 USD/month for 100 “slots” of processing capacity (it is not clear how many slots would be necessary to handle 12.7 TB relatively quickly).
 
-The GKG raw data files are zipped tab-delimited files (.csv.zip extensions) that can be downloaded from HTTP URL sites. The list of all available files from GDELT is included at http://data.gdeltproject.org/gdeltv2/masterfilelist.txt. The structure of the GKG file sites is http:///data.gdeltproject.org/gdeltv2/YYYYMMDDHHMMSS.gkg.csv.zip (using 24-hour date-time), and these are aggregated into 15-minute batches. For example, a GKG batch generated at 3:30PM on 03 February 2020 could be retrieved from http:///data.gdeltproject.org/gdeltv2/20200203153000.gkg.csv.zip.
+The GKG raw data files are zipped tab-delimited files (.csv.zip extensions) that can be downloaded from HTTP URL sites. The list of all available files from GDELT is included at http://data.gdeltproject.org/gdeltv2/masterfilelist.txt. The structure of the GKG file sites is http://data.gdeltproject.org/gdeltv2/YYYYMMDDHHMMSS.gkg.csv.zip (using 24-hour date-time), and these are aggregated into 15-minute batches. For example, a GKG batch generated at 3:30PM on 03 February 2020 could be retrieved from http://data.gdeltproject.org/gdeltv2/20200203153000.gkg.csv.zip.
 
 The gdeltPyR Python package offers a simple interface to request the GKG dataset (and the other GDELT datasets). This works by creating parallel HTTP GET requests to the raw data files, so it tends to be very quick. The requests are restricted to entire days (ie. specifying dates NOT datetimes), but every 15-minute batch for the specified dates are returned. If requesting up to the current date, then it will return the dataset up to the latest 15-minute batch. It will print a warning message for invalid URLs (datetimes for which GDELT is missing data) or if no data is returned by a valid URL (not sure why this happens).
 
@@ -70,37 +70,29 @@ This is a Amazon dataset hosted in a public S3 bucket, but can also be retrieved
 
 The _cc_process.py_ script supports retrieval of both the original dataset (CC-MAIN) and the subset which only includes news articles (CC-NEWS). This script extracts the scraped webpages with nz top-level domain (e.g. ".co.nz" or ".org.nz") by downloading the CC datasets using HTTPS links and then searching the WARC files for the relevant webpages, extracting these webpage's text, and saving this information to CSV files (along with the publish-datetime and webpage's URL). There is a separate CSV file produced for each '.warc.gz' file. This process works okay for CC-NEWS as this dataset is small-to-medium size (\~6,500 files for Jan 2020-Feb 2021), but is infeasible for CC-MAIN due the number of files required to be downloaded (\~700,000 files for Jan 2020-Feb 2021). During initial testing in the AWS environment, it seemed like it took _cc_process.py_ about 30 minutes per 100 files, so processing Jan 2020-Feb 2021 would take about 34 hours for CC-NEWS and about 150 days for CC-MAIN. Each '.warc.gz' file is 1 GB (before unzipping).
 
-A more efficient process sends querys to data contained in the S3 bucket and only download the NZ webpages, since this would reduce the amount of data required to be downloaded and may provide more efficient processing. (This process does not work for CC-NEWS.) This process queries the Parquet index files to find where in the WARC files contains '.nz' webpages and then only downloads these parts of the WARC files.
+A more efficient process sends querys to data contained in the S3 bucket and only download the NZ webpages, since this would reduce the amount of data required to be downloaded and may provide more efficient processing. The _cc_process_v2.py/cc_process_v2.1.py_ scripts send queries to a collection of '.parquet' files (aka. index files) to find which parts of the commoncrawl WARC files contain '.nz' webpages and then only downloads these parts. (Only CC-MAIN has the set of index files, CC-NEWS does not so this process does not work for CC-NEWS.) 
 
 The two main options for querying data in S3 buckets is _S3 Select_ and _Amazon Athena_. Both allow SQL-style queries to CSV, JSON, or [Parquet](https://databricks.com/glossary/what-is-parquet) datasets, 
 which can be stored in a compressed format (GZIP typically recommended). Differences:
 - Big Picture: S3 Select is more designed for ad hoc queries and Athena is designed more for big data
 - Athena will incur larger costs and required activation
-- Athena can perform queries on a collection of files (ie. an entire folder) whereas S3 Select sends a query to an individual file. This limitation of S3 Select can be overcome with for-loops but complicates the code.
+- Athena can perform queries on a collection of files (ie. an entire folder) whereas S3 Select sends a query to an individual file. This means Athena would be able to send a single query per CC-MAIN batch, while S3 Select must send a query per '.parquet' file which results in hundreds of queries (and corresponding responses) per CC-MAIN batch.
 - S3 Select requires that “The maximum uncompressed row group size is 256MB”. **This is not always satisfied for the CC-MAIN index files which this means that some of the files cannot be processed using S3 Select (rough estimate = 25-33% will unable to be processed).**
 
-For the 2020-10 CC-MAIN batch there is about 300 index files. The '.nz' webpages seem to be extremely concentrated within a few index files; most index files contain zero '.nz' webpages while part-00108 contains 2.1 million '.nz' webpages. There does not seem to be any documentation about how the indices are batched into the 300 files, so there is no (current) way to predict which index files contain '.nz' articles. The index files for this batch make up 202.8 GiB  of data, which can be found by running (AWS CLI):
+For the 2021-10 CC-MAIN batch there is about 300 index files. The '.nz' webpages seem to be extremely concentrated within a few index files; most index files contain zero '.nz' webpages while 'part-00108.parquet' contains 2.1 million '.nz' webpages (NB: it seems likely that 'part-00108.parquet' is the only index file which contains '.nz' webpages but this cannot be confirmed). There does not seem to be any documentation about how the indices are batched into the 300 files, so there is no (current) way to predict which index files contain '.nz' articles. The index files for this batch make up 202.8 GiB of data, which can be found by running (AWS CLI):
 ```
 aws s3 ls commoncrawl/cc-index/table/cc-main/warc/crawl=CC-MAIN-2020-10/subset=warc/ --recursive --human-readable --summarize --no-sign-request
 ```
 
-The best way to see if many webpages have been missed is by looking at the number of articles over time and then maybe comparing this to the number of news articles in GDELT over time. We will not truly know how many '.nz' articles we are missing when using S3 Select:
+A possible way to see if many webpages have been missed is by looking at the number of articles over time and then comparing this to the number of news articles in GDELT over time. We will not truly know how many '.nz' articles we are missing when using S3 Select:
 - worst-case scenario: all of them. This would be obvious since there would be a large gap in the data, but there would be no way to remedy this using S3 Select.
 - best-case scenario: none of them.
-- average-case scenario: ??
+- average-case scenario: probably all of them, since the '.nz' webpages seem to be extremely concentrated within a small number of '.parquet' files (ie. within one or two files).
 
 NB: GDELT collection method takes all news articles which _mention_ New Zealand, where commoncrawl collection method takes all webpages which use New Zealand top-level domain (.nz).
 
-### CC-NEWS Directory Structure
-Information about this dataset can be found at https://commoncrawl.org/2016/10/news-dataset-available/.
-
-The '.warc.gz' files are released every hour or two, which usually results in 1 GB files.
-The individual files are available at https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/YYYY/MM/ or s3://commoncrawl/crawl-data/CC-NEWS/YYYY/MM/ (with YYYY = year, MM = month).
-
-An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz or s3://commoncrawl/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz. This is the first file for January 2021 and contains 34,277 scraped webpages, of which 58 have URLs with '.nz' as their top-level domain.
-
 ### CC-MAIN Directory Structure
-The complete data structure is described at https://commoncrawl.org/the-data/get-started/.
+The complete dataset structure is described at https://commoncrawl.org/the-data/get-started/.
 
 .warc = Web ARChive format. Used to store scraped information from webpages. These are gzipped (compressed) before being stored in the _commoncrawl_ S3 bucket.
 
@@ -108,6 +100,16 @@ The '.warc.gz' files are released in batches about every 5 weeks. The batches ar
 
 An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz OR 
 s3://commoncrawl/crawl-data/CC-MAIN-2021-10/segments/1614178347293.1/warc/CC-MAIN-20210224165708-20210224195708-00000.warc.gz. This is the first file in the _CC-MAIN-2021-10_ batch and contains 44,408 scraped webpages, of which 98 have URLs with '.nz' as their top-level domain.
+
+### CC-NEWS Directory Structure
+**NOTE THAT the CC-NEWS dataset has a different directory structure, release schedule and collation frequency to CC-MAIN.**
+
+Information about this dataset can be found at https://commoncrawl.org/2016/10/news-dataset-available/.
+
+The '.warc.gz' files are released every hour or two, which usually results in 1 GB files.
+The individual files are available at https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/YYYY/MM/ or s3://commoncrawl/crawl-data/CC-NEWS/YYYY/MM/ (with YYYY = year, MM = month).
+
+An example of an individual filepath is https://commoncrawl.s3.amazonaws.com/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz or s3://commoncrawl/crawl-data/CC-NEWS/2021/01/CC-NEWS-20210101014736-01421.warc.gz. This is the first file for January 2021 and contains 34,277 scraped webpages, of which 58 have URLs with '.nz' as their top-level domain.
 
 ## Hedonometer
 The main implementation is at http://hedonometer.org/, which provides a daily index of the positivity of people’s tweets (Twitter). This is informed by the Twitter Decahose API, which provides a 10% random sample of all posts on Twitter (approx. 50 million tweets per day in 100GB of raw JSON).  The daily score reflects which words are being use most (about 200 million unique per day) and their associated positivity, and is constructed using a bag-of-words model. More formally, the weighted average level of happiness for a given text T is calculated as
@@ -129,3 +131,34 @@ The overall happiness score ignores words which have a happiness score between 4
 The main indicator of public sentiment is the _Time Series of Happiness_, which is informed by posts on Twitter. There are other related projects on the site: _Happiness of Stories_ which is informed by books and movies, _Happiness of the News_ which is informed by the New York Times and CBS, and _Happiness of Outside_ which reflects a collection of articles on a blogging site about outdoor activities. These projects all present per word average happiness shift between two bodies of text (e.g. newspaper section, article), and do not include time series plots. The authors are strong proponents of the word shift presentation, as it allows for more information about why sentiment has changed between two time periods (or bodies of text). 
 
 The NZ news sentiment lineplot/visualisation could include these word shifts as additional information like how hedonometer presents these as overlays. For a given day, the hedonometer uses these word shifts to show any words which are being used significantly more or less than the previous week. The hedonometer also uses Wikipedia to automatically detect important/significant events on any given day.
+
+## Twitter API
+There is two versions of the Twitter API: v1.1 and v2 ([full documentation](https://developer.twitter.com/en/docs/twitter-api/rate-limits)). The new version (v2) was released Aug 2020 and is _Early Access_ since Twitter has not implemented all the types of users/plans. The (rough) timeline for completely replacing v1.1 with v2 can be found [here](https://developer.twitter.com/en/products/twitter-api/early-access/guide#rollingout).
+
+### Can Stats NZ use this?
+When signing up for an "Individual developer account" there are some screening questions before the account can be approved. It is not clear what would prevent an account from being approved (ie. whether Stats NZ would be allowed). These were (paraphrased):
+- General intended use
+- How would you analyze Twitter data?
+- Tweet, retweet or like? (Which parts of the data/API will you use?)
+- Will you show Tweets or Twitter information off Twitter?
+- **Will you be providing Tweets or Twitter information to government entites?**
+
+The questions for the other types of developer accounts are likely similar to these.
+
+**Also, Twitter has [restrictions when using the Twitter APIs](https://developer.twitter.com/en/developer-terms/more-on-restricted-use-cases) which include deriving/inferring sensitive information about Twitter uses, matching a Twitter account with an "off-Twitter identifier", and the redistribution of downloaded Twitter content.**
+
+### Plans
+API v1.1 has standard (free), premium and enterprise account types. The full details for standard and premium can be found [here](https://developer.twitter.com/en/pricing/search-fullarchive) or seen below. Signing up for the enterprise plan (and getting details of what the plan offers) requires contacting Twitter. The standard and premium plans allowing querying the full Twitter archives, but the standard plan is limited to 50 requests/month as it is the free option. The premium option is priced depending on the number of total request per month, starting with 99 USD for "Up to 100" requests and ending with 1,899 USD for "Up to 2,500" requests (look in link above for intermediate pricing).
+
+Package                | Standard/Sandbox                    | Premium
+:--------------------- | ----------------------------------- | --------------------------------------
+Rate limit             | 30 requests/min AND 10 requests/sec | 60 requests/min AND 10 requests/sec
+Tweets per request     | 100                                 | 500
+Effective Tweets limit | 3000 tweets/min AND 1000 tweets/min | 30,000 tweets/min AND 5,000 tweets/min
+
+API v2 has standard (free) and academic research account types. The free tier only allows the retrieval of Tweets within the previous week, while the academic tier has access to the full Twitter archive.
+
+### Retrieving NZ Tweets from 2020 onwards
+API v1.1 has the "geocode" operator which can be used to return Tweets within a given radius of a given latitude-longitude coordinate. This could be used (with a few different circles) to get Tweets from New Zealand. From brief testing, this seems to be limited to Tweets within the last week, but [this page](https://developer.twitter.com/en/pricing/search-fullarchive) implies that there is a way to access the full archives.
+
+Any location-related operators in API v2 require an academic research account. The location operators can be used to request Tweets that are: tagged with a specific location name (place), from a given country (place_country) or are within two types of latitude-longitude areas (point_radius, bounding_box). Also, using v2 to search for Tweets before a week ago requires an academic research account.
