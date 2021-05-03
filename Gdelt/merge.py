@@ -41,17 +41,19 @@ def list_all_objects_s3(bucket, prefix):
     return keys
 
 
-def merge_csvs_from_s3(mergefile, inkeys, bucket, overwrite=False):
+def merge_csvs_from_s3(mergefile, inkeys, bucket, headers, overwrite=False):
     if os.path.exists(mergefile) and not overwrite:
         return
     
-    # Clear existing CSV
+    # Clears existing CSV
+    headers_str = ','.join(headers) + '\n'
+    print(headers_str)
     with open(mergefile, 'w') as f:
-        f.write('')
+        f.write(headers_str)
     
     print("Keys:")
     inkeys_l = len(inkeys)
-    for i, key in enumerate(inkeys):
+    for i, key in enumerate(inkeys[:1]):
         print(f"{i + 1} / {inkeys_l}")
         content = read_file_from_s3(bucket, key)
         with open(mergefile, mode='a') as f:
@@ -78,6 +80,28 @@ def get_18_to_21_keys(country):
 
 if __name__ == "__main__":
     sess = boto3.Session(profile_name="xmiles")
+    headers = [
+        'gkg_id', 'date', 'source', 'source_name', 'doc_id', 
+        'themes', 'locations', 'persons', 'orgs', 
+        'tone', 'pos', 'neg', 'polarity', 'ard', 'srd',
+        'wc', 
+        'lexicode_neg', 'lexicode_pos', # c3.*
+        'MACROECONOMICS', 'ENERGY', 'FISHERIES', 
+        'TRANSPORTATION', 'CRIME', 'SOCIAL_WELFARE',
+        'HOUSING', 'FINANCE', 'DEFENCE', 'SSTC',
+        'FOREIGN_TRADE', 'CIVIL_RIGHTS', 
+        'INTL_AFFAIRS', 'GOVERNMENT_OPS',
+        'LAND-WATER-MANAGEMENT', 'CULTURE',
+        'PROV_LOCAL', 'INTERGOVERNMENTAL',
+        'CONSTITUTIONAL_NATL_UNITY', 'ABORIGINAL',
+        'RELIGION', 'HEALTHCARE', 'AGRICULTURE',
+        'FORESTRY', 'LABOUR', 'IMMIGRATION',
+        'EDUCATION', 'ENVIRONMENT',
+        'finstab_pos', 'finstab_neg', 'finstab_neutral',
+        'finsent_neg', 'finsent_pos', 'finsent_unc',
+        'opin_neg', 'opin_pos',
+        'sent_pos', 'sent_neg', 'sent_pol'
+    ]
     country_to_prefix = { 
         'nz': "processed_gdelt_nz/",
         'au': "processed_gdelt_au/",
@@ -86,10 +110,10 @@ if __name__ == "__main__":
     countries = ['nz', 'au', 'ca']
     
     # Change as needed
-    COUNTRY = "ca"
+    COUNTRY = "nz"
     
     keys_18_21 = get_18_to_21_keys(COUNTRY)
     print(f"got {len(keys_18_21)} keys")
 
-    merge_csvs_from_s3(f'gdelt-{COUNTRY}-18-21.csv', keys_18_21, "statsnz-covid-xmiles")
+    merge_csvs_from_s3(f'gdelt-{COUNTRY}-18-21.csv', keys_18_21, "statsnz-covid-xmiles", headers)
     print("finished")
