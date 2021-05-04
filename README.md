@@ -3,10 +3,11 @@
 
 ---
 ## Table of Contents
-1. [GDELT](#gdelt-globalknowledgegraph)
-2. [Common Crawl](#commoncrawl)
-3. [Hedonometer](#hedonometer)
-4. [Twitter API](#twitterapi)
+1. GDELT - Global Knowledge Graph
+2. GDELT - Global Entity Graph
+2. Common Crawl
+3. Hedonometer
+4. Twitter API
 ---
 
 
