@@ -1,6 +1,15 @@
 # COVID19 SENTIMENT ANALYSIS DOCS
 
 
+---
+## Table of Contents
+1. [GDELT](#gdelt-globalknowledgegraph)
+2. [Common Crawl](#commoncrawl)
+3. [Hedonometer](#hedonometer)
+4. [Twitter API](#twitterapi)
+---
+
+
 ## GDELT - Global Knowledge Graph
 The GDELT (Global Database of Events, Language and Tone) website provides the Global Knowledge Graph (GKG), Global Entity Graph (GEG) and various other databases related to global news coverage.
 
