@@ -1,15 +1,14 @@
-import os
-import csv
-import subprocess
-import requests
-import urllib
-import gzip
-import itertools
+import os, subprocess
+import csv, gzip
+import requests, urllib
+import concurrent.futures, itertools
+
 import warcio
 import newspaper
-import concurrent.futures
 
 from datetime import date, timedelta
+from pandas import date_range
+import pandas as pd
 
 
 def get_warc_urls(warc_paths_gz_url):
@@ -71,16 +70,19 @@ def get_ccnews_urls():
     return ccnews_urls
 
 
-def get_date_range(start_date, end_date):
+def get_date_range(start_date, end_date=None):
     """
+    - start_date: datetime.date,
+    - end_date: datetime.date, should be after start_date and defaults to today's date
+    
     Return list[string] of dates between start_date & end_date (inclusive)
     """
-    date_range = end_date - start_date
-    dates = []
-    for i in range(date_range.days + 1):
-        date = (start_date + timedelta(days=i)).strftime("%Y%m%d")
-        dates.append(date)
-    return dates
+    if end_date is None:
+        end_date = date.today()
+        
+    dates = pd.date_range(start_date, end_date, freq='D')
+    dates_str = dates.strftime("%Y%m%d")
+    return dates_str
 
 
 def process_cc_file(url, mode):
@@ -165,7 +167,8 @@ if __name__ == "__main__":
     # CC-NEWS
     ccnews_urls = get_ccnews_urls()
 
-    dates = get_date_range(date(2020, 1, 1), date(2021, 3, 6))
+    start_date = date(year=2020, month=1, day=1)
+    dates = get_date_range(start_date)
     ccnews_urls_subset = [url for url in ccnews_urls 
                           for date in dates if "CC-NEWS-" + date in url]
     
