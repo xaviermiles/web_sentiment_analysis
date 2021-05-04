@@ -66,14 +66,15 @@ def process_parquet_key(crawl_batch, key):
     Returns:
     - list[string] if '.gz.parquet' file could be processed. Will be an empty
     list if the file does not contains any '.nz' indices.
-    - None if any Errors were thrown when trying to process the 
+    - None if any Errors were thrown when trying to process
     """
     
     sql_str = """
         SELECT * FROM S3Object s
         WHERE s.url_host_tld='nz'
     """
-    s3_client = boto3.session.Session(profile_name="xmiles").client('s3')
+#     s3_client = sess.client('s3')
+    s3_client = boto3.Session(profile_name="xmiles").client('s3')
     
     try:
         resp = s3_client.select_object_content(
@@ -122,8 +123,9 @@ def process_index_str(crawl_batch, idx_ref_str):
     idx_ref_str: Index Reference String, a string corresponding to a single
         entry in the CC columnar index (parquet files)
     """
-    s3_client = boto3.session.Session(profile_name="xmiles").client('s3')
-        
+#     s3_client = sess.client('s3')
+    s3_client = boto3.Session(profile_name="xmiles").client('s3')    
+    
     try:
         idx_ref = json.loads(idx_ref_str)
     except:
@@ -166,7 +168,7 @@ def process_index_str(crawl_batch, idx_ref_str):
     if html_start == -1 or html_end == -1:
 #         log(crawl_batch, "Cannot find HTML: " + idx_ref['url'])
         # Don't need to be alerted - too much spam
-        print("no html")
+#         print("no html")
         return
     html_contents = warc_contents[html_start:html_end]
     
@@ -225,29 +227,35 @@ def process_batch(crawl_batch):
             valid_parquet_idxs_flat = [idx_str.rstrip() for idx_str in f.readlines()]
     num_webpages = len(valid_parquet_idxs_flat)
     
-    bunch_size = 20000
+    bunch_size = 10000
     num_bunches = math.ceil(num_webpages / bunch_size)
     bunch_folder = os.path.join("processed_ccmain_bunches", crawl_batch)
-    if os.path.exists(bunch_folder):
-        shutil.rmtree(bunch_folder)  # clear existing data
-    os.makedirs(bunch_folder)
+    if not os.path.exists(bunch_folder):
+        os.makedirs(bunch_folder)
     num_fail_webpages = 0
     
     log(crawl_batch, f"\nProcessing {num_webpages} webpages in {num_bunches} bunches")
     start = datetime.now()
     for i in range(num_bunches):
-        log(crawl_batch, f"Bunch number {i + 1}")
+        bunch_fpath = os.path.join(bunch_folder, f"{crawl_batch}_NZ-{i + 1:04}.csv")
+        if os.path.exists(bunch_fpath): 
+            continue  # Do not overwrite existing output/bunches
+        
+        log(crawl_batch, f"Bunch number {i + 1:04}")
         with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
             output = list(
                 executor.map(process_index_str, itertools.repeat(crawl_batch), 
                              valid_parquet_idxs_flat[(bunch_size*i):(bunch_size*(i+1)-1)])
             )
+#         output = [
+#             process_index_str(crawl_batch, p_key, s3_client)
+#             for p_key in valid_parquet_idxs_flat[(bunch_size*i):(bunch_size*(i+1)-1)]
+#         ]
         
         headers = ["Datetime", "URL", "Text"]
         good_output = [headers] + list(filter(None, output))
         num_fail_webpages += len(output) - (len(good_output) - 1)
         
-        bunch_fpath = os.path.join(bunch_folder, f"{crawl_batch}_NZ-{i + 1}.csv")
         with open(bunch_fpath, "w") as f:
             writer = csv.writer(f)
             writer.writerows(good_output)
@@ -271,6 +279,8 @@ def process_batch(crawl_batch):
 if __name__ == "__main__":
     global no_text_counter
     no_text_counter = Value('i', 0)
+    
+#     sess = boto3.Session(profile_name="xmiles")
     
     batch = "CC-MAIN-2021-10"
     create_logfile(batch)

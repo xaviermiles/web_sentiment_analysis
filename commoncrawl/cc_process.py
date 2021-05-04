@@ -96,7 +96,7 @@ def process_cc_file(url, mode):
         raise TypeError("mode argument must be 'ccnews' or 'ccmain'")
         
     fname_in = url.split('/')[-1]
-    fname_out = f"ccmain-nz-{fname_in.replace('CC-NEWS-', '').replace('CC-MAIN-', '').replace('.warc.gz', '')}.csv"
+    fname_out = f"{mode}-nz-{fname_in.replace('CC-NEWS-', '').replace('CC-MAIN-', '').replace('.warc.gz', '')}.csv"
     fpath_out = os.path.join(f"processed_{mode}", fname_out)
     # Skip if already processed
     if os.path.exists(fpath_out): 
@@ -163,22 +163,22 @@ def process_cc_file(url, mode):
     
 if __name__ == "__main__":
     # CC-NEWS
-#     ccnews_urls = get_ccnews_urls()
+    ccnews_urls = get_ccnews_urls()
 
-#     dates = get_date_range(date(2020, 1, 1), date(2021, 3, 6))
-#     ccnews_urls_subset = [url for url in ccnews_urls 
-#                           for date in dates if "CC-NEWS-" + date in url]
+    dates = get_date_range(date(2020, 1, 1), date(2021, 3, 6))
+    ccnews_urls_subset = [url for url in ccnews_urls 
+                          for date in dates if "CC-NEWS-" + date in url]
     
-#     print(f"Processing {len(ccnews_urls_subset)} CC-NEWS URLs")
-#     with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
-#         executor.map(process_ccnews_file, ccnews_urls_subset, itertools.repeat("ccnews"))
-    
-    ## CC-MAIN
-    years = ['2020', '2021']
-    ccmain_urls = get_ccmain_urls(years)
-    print(ccmain_urls[:10])
-    
-    MODE = "ccmain"
-    print(f"Processing {len(ccmain_urls)} {MODE} URLs")
+    print(f"Processing {len(ccnews_urls_subset)} CC-NEWS URLs")
     with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
-        executor.map(process_cc_file, ccmain_urls[:100], itertools.repeat(MODE))
+        executor.map(process_cc_file, ccnews_urls_subset, itertools.repeat("ccnews"))
+    
+#     ## CC-MAIN
+#     years = ['2020', '2021']
+#     ccmain_urls = get_ccmain_urls(years)
+#     print(ccmain_urls[:10])
+    
+#     MODE = "ccmain"
+#     print(f"Processing {len(ccmain_urls)} {MODE} URLs")
+#     with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
+#         executor.map(process_cc_file, ccmain_urls[:100], itertools.repeat(MODE))

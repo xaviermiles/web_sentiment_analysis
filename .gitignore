@@ -4,6 +4,10 @@ commoncrawl/hedonometer_words.json
 commoncrawl/processed_ccnews/
 commoncrawl/processed_ccmain/
 
+commoncrawl/logs/
+commoncrawl/unprocessed_ccmain_idxs/
+commoncrawl/processed_ccmain_bunches/
+
 Gdelt/processed_gdelt2/
 Gdelt/gdelt2_master.txt
 
