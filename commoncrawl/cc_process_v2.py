@@ -144,18 +144,17 @@ def process_parquet_key(crawl_batch, key):
             OutputSerialization={'JSON': {}}
         )
         
-        resp_info = []
+        resp_str = ""
         end_event_received = False
         continuation_events = 0
         for event in resp['Payload']:
             if 'Records' in event:
                 payload = event['Records']['Payload'].decode()
-                x = payload.split('\n')[:-1]
-                print(len(x))
-                break
+                resp_str += payload
             elif 'Cont' in event:
                 continuation_events += 1
         
+        resp_info = resp_str.split('\n')[:-1]
         log(crawl_batch, 
             f"Processed ({len(resp_info): >3}): {key.split('/')[-1]}"
             f", ce={continuation_events}")
@@ -255,15 +254,14 @@ def process_batch(crawl_batch):
         for subkey in parquet_subkeys
     ]
     
-    unprocessed_idxs_key = f"commoncrawl/unprocessed_ccmain_idxs/{crawl_batch}.txt"
+    unprocessed_idxs_key = f"commoncrawl/unprocessed_ccmain_idxs/{crawl_batch}_NZ.txt"
     processed_parquets_flag = False
     if is_s3_key_valid("statsnz-covid-xmiles", unprocessed_idxs_key):
         log(crawl_batch, "Loading unprocessed indices from txt file")
         valid_parquet_idxs_flat = [
             idx_str.rstrip() 
             for idx_str in read_txt_from_s3("statsnz-covid-xmiles", unprocessed_idxs_key).split('\n')[:-1]
-        ]
-            
+        ]    
     else:
         num_parquet_keys = len(parquet_keys)
         print(f"Processing {num_parquet_keys} Parquet files")
@@ -275,11 +273,11 @@ def process_batch(crawl_batch):
         # Remove empty lists and None elements
         valid_idxs = list(filter(None, parquet_idxs))
         # Flatten 2D list to 1D list
-        valid_idxs_flat = list(itertools.chain.from_iterable(valid_parquet_idxs))
+        valid_idxs_flat = list(itertools.chain.from_iterable(valid_idxs))
         write_to_txt_s3(valid_idxs_flat, "statsnz-covid-xmiles", unprocessed_idxs_key)
         
         processed_parquets_flag = True
-        
+    
     num_webpages = len(valid_parquet_idxs_flat)
     bunch_size = 10000
     num_bunches = math.ceil(num_webpages / bunch_size)

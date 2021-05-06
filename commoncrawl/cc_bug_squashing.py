@@ -7,6 +7,12 @@
 # the start. This is a problem with boto3/AWS so not something able to be 
 # prevented on the recieving end (as far as I can tell).
 
+# UPDATE: the response chunks are split by newline and the last element is 
+# dropped, as I thought there would be a newline at the end of each chunk,
+# thus creating an empty-string element when splitting (WHICH WAS WRONG).
+# They should be joined into one string before being split by newline (and
+# then drop the one final empty-string element).
+
 import os, shutil, subprocess
 import csv, json, gzip
 import concurrent.futures, itertools
@@ -78,9 +84,56 @@ def process_parquet_key(crawl_batch, key):
 #                 assert xx_fail = xxi
 
             previous_final_resp = new_resp_info[-1]
+    
+    
+def process_parquet_key_fix(crawl_batch, key):
+    """
+    Returns:
+    - list[string] if '.gz.parquet' file could be processed. Will be an empty
+    list if the file does not contains any '.nz' indices.
+    - None if any Errors were thrown when trying to process the 
+    """
+    
+    sql_str = """
+        SELECT * FROM S3Object s
+        WHERE s.url_host_tld='nz'
+    """
+    s3_client = boto3.session.Session(profile_name="xmiles").client('s3')
+
+    resp = s3_client.select_object_content(
+        Bucket='commoncrawl',
+        Key=key,
+        Expression=sql_str,
+        ExpressionType='SQL',
+        InputSerialization={'Parquet': {}},
+        OutputSerialization={'JSON': {}}
+    )
+
+#     resp_info = []
+    records = ""
+    record_num = 0
+    payload_fail_flag = False
+    previous_final_resp = None
+    for event in resp['Payload']:
+        if 'Records' in event:            
+            record_num += 1
+
+            payload = event['Records']['Payload'].decode()
+            records += payload
+            
+        if record_num > 34:
+            break
+            
+    resp_info = records.split('\n')
+    for i, infoi in enumerate(resp_info):
+        try:
+            zoo = json.loads(infoi)
+        except:
+            print("FAIL JSON CONVERSION. Is it the final response?", i == (len(resp_info) - 1))
+        
 
 
 if __name__ == "__main__":
     pkey = "cc-index/table/cc-main/warc/crawl=CC-MAIN-2021-10/subset=warc/part-00108-dbb5a216-bcb2-4bff-b117-e812a7981d21.c000.gz.parquet"
-    process_parquet_key("CC-MAIN-2021-10", pkey)
+    process_parquet_key_fix("CC-MAIN-2021-10", pkey)
     
