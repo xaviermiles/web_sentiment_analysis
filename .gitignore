@@ -11,6 +11,11 @@ commoncrawl/processed_ccmain_bunches/
 Gdelt/processed_gdelt2/
 Gdelt/gdelt2_master.txt
 
+twitter/twitter_log.txt
+
+# API keys
+twitter/twitter_config.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
