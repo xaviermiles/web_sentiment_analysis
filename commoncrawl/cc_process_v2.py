@@ -242,7 +242,7 @@ def process_index_str(crawl_batch, idx_ref_str):
     return [fetch_time, url, text]
     
 
-def process_batch(crawl_batch):
+def process_batch(crawl_batch, bucket):
     """
     FILL OUT
     """
@@ -256,11 +256,11 @@ def process_batch(crawl_batch):
     
     unprocessed_idxs_key = f"commoncrawl/unprocessed_ccmain_idxs/{crawl_batch}_NZ.txt"
     processed_parquets_flag = False
-    if is_s3_key_valid("statsnz-covid-xmiles", unprocessed_idxs_key):
+    if is_s3_key_valid(bucket, unprocessed_idxs_key):
         log(crawl_batch, "Loading unprocessed indices from txt file")
         valid_parquet_idxs_flat = [
             idx_str.rstrip() 
-            for idx_str in read_txt_from_s3("statsnz-covid-xmiles", unprocessed_idxs_key).split('\n')[:-1]
+            for idx_str in read_txt_from_s3(bucket, unprocessed_idxs_key).split('\n')[:-1]
         ]    
     else:
         num_parquet_keys = len(parquet_keys)
@@ -274,7 +274,7 @@ def process_batch(crawl_batch):
         valid_idxs = list(filter(None, parquet_idxs))
         # Flatten 2D list to 1D list
         valid_idxs_flat = list(itertools.chain.from_iterable(valid_idxs))
-        write_to_txt_s3(valid_idxs_flat, "statsnz-covid-xmiles", unprocessed_idxs_key)
+        write_to_txt_s3(valid_idxs_flat, bucket, unprocessed_idxs_key)
         
         processed_parquets_flag = True
     
@@ -288,7 +288,7 @@ def process_batch(crawl_batch):
     for i in range(num_bunches):
         bunch_key = f"commoncrawl/processed_ccmain_bunches/{crawl_batch}/" \
                     f"{crawl_batch}_NZ-{i + 1:04}.csv"
-        if is_s3_key_valid("statsnz-covid-xmiles", bunch_key):
+        if is_s3_key_valid(bucket, bunch_key):
             continue # Do not overwrite existing output/bunches
         
         log(crawl_batch, f"Bunch number {i + 1:04}")
@@ -302,7 +302,7 @@ def process_batch(crawl_batch):
         good_output = [headers] + list(filter(None, output))
         num_fail_webpages += len(output) - (len(good_output) - 1)
         
-        write_to_csv_s3(good_output)
+        write_to_csv_s3(good_output, bucket, bunch_key)
         
     end = datetime.now()
     log(crawl_batch, "Processing took " + str(end - start))
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     
     batch = "CC-MAIN-2021-10"
     create_logfile(batch)
-    process_batch(batch)
+    process_batch(batch, "statsnz-covid-xmiles")
     
 #     batches_20_and_21 = get_ccmain_batches(["2020", "2021"])
 #     for batch in batches_20_and_21:
