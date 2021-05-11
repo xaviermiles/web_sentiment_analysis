@@ -48,8 +48,10 @@ def write_to_csv_s3(csv_list, bucket, key):
         the inner lists will then be joined by newlines.)
     """
     s3_client = boto3.Session(profile_name="xmiles_processing").client('s3') 
+    # double-quotes are used to enclose fields, so any double-quotes are 
+    # changed to single-quotes
     csvlist_str_elements = [
-        [str(x) for x in row]
+        ['"' + str(x).replace('"', "'") + '"' for x in row]
         for row in csv_list
     ]
     
@@ -62,7 +64,7 @@ def read_txt_from_s3(bucket, key):
     s3_client = boto3.Session(profile_name="xmiles_processing").client('s3')
     resp = s3_client.get_object(Bucket=bucket, Key=key)
     # Python 3.8/3.9 can't download files over 2GB via HTTP, so file is 
-    # streamed just in case
+    # streamed in chunks just in case
     txt_content = ''.join([
         chunk.decode() for chunk in resp['Body'].iter_chunks()
     ])
