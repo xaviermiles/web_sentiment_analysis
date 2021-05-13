@@ -3,10 +3,10 @@ commoncrawl/cc-nz-articles-test.csv
 commoncrawl/hedonometer_words.json
 commoncrawl/processed_ccnews/
 commoncrawl/processed_ccmain/
-
 commoncrawl/logs/
-commoncrawl/unprocessed_ccmain_idxs/
-commoncrawl/processed_ccmain_bunches/
+
+commoncrawl/digital_economy/data/
+commoncrawl/digital_economy/results/
 
 Gdelt/processed_gdelt2/
 Gdelt/gdelt2_master.txt
