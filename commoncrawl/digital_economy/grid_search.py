@@ -1,15 +1,14 @@
-# Example of using Pipeline + GridSearchCV:
+# Using more parameters in the grid search will give better exploring 
+# power but will increase processing time in a combinatorial way.
+#
+# EXAMPLES:
+# Using Pipeline + GridSearchCV:
 # https://scikit-learn.org/stable/auto_examples/model_selection/grid_search_text_feature_extraction.html
-
-# Example of statistical comparison of model results:
-# https://scikit-learn.org/stable/auto_examples/model_selection/plot_grid_search_stats.html
-# (goes far beyond this script)
-
 # Using Doc2Vec model with GridSearchCV:
 # https://stackoverflow.com/questions/50278744/pipeline-and-gridsearch-for-doc2vecs
+# Statistical comparison of model results (goes far beyond this script):
+# https://scikit-learn.org/stable/auto_examples/model_selection/plot_grid_search_stats.html
 
-# Using more parameters in the grid search will give better exploring 
-# power but will increase processing time in a combinatorial way
 
 import os
 import csv, json
@@ -21,30 +20,24 @@ from collections import Counter
 
 import numpy as np
 import pandas as pd
-# from pandarallel import pandarallel
-# import matplotlib.pyplot as plt
-# import seaborn as sns
 
 from sklearn import metrics
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV
-# from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDClassifier, LogisticRegression
 
 import gensim
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
-# (local) copied code from gensim.sklearn_api.d2vmodel w/ Gensim v3.8.3:
-# from d2v_sklearn_wrapper import D2VTransformer
+import lightgbm as lgb
 
 
 class Doc2VecWrapper(BaseEstimator):
 
     def __init__(self, vector_size=100, min_count=5, epochs=10, window=5, 
                  min_alpha=0.001):
-#         self.d2v_model = None
         self.vector_size = vector_size
         self.min_count = min_count
         self.epochs = epochs
@@ -60,7 +53,6 @@ class Doc2VecWrapper(BaseEstimator):
             min_alpha=self.min_alpha
         )
         
-#         words_series = [gensim.utils.simple_preprocess(text) for text in text_series]
         words_series = text_series.map(gensim.utils.simple_preprocess)
         tagged_words_series = pd.Series([
             TaggedDocument(words=wordsi, tags=[targeti]) 
@@ -114,9 +106,13 @@ def read_csv_from_s3(bucket, key):
     return df
 
 
-def do_grid_search(websites_df, pipe, parameters, model_name):
-    # find the best parameters for both the feature extraction and the
-    # classifier
+def do_grid_search(websites_df, pipe, parameters):
+    """
+    Find the best parameters for both the feature extraction and the classifier
+    
+    Return None
+    """
+    model_name = "_".join(pipe.named_steps.keys())
     grid_search = GridSearchCV(pipe, parameters, n_jobs=-1, verbose=2,
                                scoring='roc_auc')
     
@@ -152,6 +148,10 @@ def do_grid_search(websites_df, pipe, parameters, model_name):
     
 
 def load_ecom_labels():
+    """
+    Loads ecom labels from JSON file to dict
+    Return dict[string -> bool] which indicates whether a given website is ecommerce
+    """
     with open(os.path.join("data", "ecom_labels.json")) as f:
         ecom_labels = json.load(f)
         
@@ -181,7 +181,9 @@ def get_sample_output(ecom_labels):
 
 
 def summarise_by_website(output, ecom_labels):
-    # Merge the webpages/rows for each given website
+    """
+    Merge the webpages/rows for each given website
+    """
     websites = pd.DataFrame(
         output.groupby('netloc')['Text'].apply(' | '.join)
     ).reset_index()
@@ -202,32 +204,58 @@ if __name__ == "__main__":
     sample_output = get_sample_output(ecom_labels)
     websites = summarise_by_website(sample_output, ecom_labels)
     
-    # Test SVM
-    tfidf_pipe = Pipeline([
-        ('tfidf', TfidfVectorizer()),
-        ('svm_clf', SGDClassifier())
-    ])
-    tfidf_params = {
-        'tfidf__max_df': (0.5, 0.75, 1.0),
-#         'tfidf__max_features': (None, 5000, 10000, 50000),
-        'tfidf__ngram_range': ((1, 1), (1, 2)),  # (unigrams, unigramsORbigrams)
-#         'tfidf__use_idf': (True, False),
-        'tfidf__norm': ('l1', 'l2'),
-#         'clf__max_iter': (20, ),
-        'svm_clf__alpha': (1e-5, 1e-6),
-        'svm_clf__penalty': ('l2', 'elasticnet'),
-#         'clf__max_iter': (10, 50, 80),
+    # Config - use comments to remove parameters
+    all_models = {
+        'tfidf': TfidfVectorizer(),
+        'svm': SGDClassifier(),
+        'd2v': Doc2VecWrapper(),
+        'lgb': lgb.LGBMClassifier(objective='binary', verbose=-1)
     }
-    do_grid_search(websites, tfidf_pipe, tfidf_params, "TFIDF")
+    all_params = {
+        'tfidf': {
+            'max_df': (0.5, 0.75, 1.0),
+#           'max_features': (None, 5000, 10000, 50000),
+            'ngram_range': ((1, 1), (1, 2)),  # (1, 1)=unigrams, (1, 2)=unigramsORbigrams
+            'stop_words': ('english', None),
+            'norm': ('l1', 'l2')
+        },
+        'd2v': {
+#             'vector_size': (50, 75),
+#             'min_count': (5, 10),
+#             'window': (5, 10)
+        },
+        'svm': {
+#             'max_iter': (40, ),
+            'alpha': (1e-5, 1e-6),
+            'penalty': ('l2', 'elasticnet'),
+#           'max_iter': (10, 50, 80)
+        },
+        'lgb': {
+            'num_leaves': (31, 63, 127),
+            'min_data_in_leaf': (10, 20, 40),
+            'max_bin': (127, 255, 511)
+        }
+    }
     
-    # Test Doc2Vec
-    d2v_pipe = Pipeline([
-        ('d2v', Doc2VecWrapper()),
-        ('svm_clf', SGDClassifier())
-    ])
-    d2v_params = {
-        'd2v__vector_size': (50, 75),
-        'd2v__min_count': (5, 10),
-        'd2v__window': (5, 10)
-    }
-    do_grid_search(websites, d2v_pipe, d2v_params, "Doc2Vec")
+    # Which tests to run? - use comments to remove models
+    combinations_to_try = [
+        ('tfidf', 'svm'), 
+#         ('d2v', 'svm'), 
+#         ('tfidf', 'lgb'), 
+#         ('d2v', 'lgb'),
+    ]
+    # Translate combinations into pipelines and parameter grids
+    pipelines_to_try = [
+        Pipeline([(step, all_models[step]) for step in steps])
+        for steps in combinations_to_try
+    ]
+    params_to_try = [
+        {
+            f"{step}__{param}": all_params[step][param] 
+            for step in steps for param in all_params[step]
+        }
+        for steps in combinations_to_try
+    ]
+    
+    for pipe, params in zip(pipelines_to_try, params_to_try):
+        do_grid_search(websites, pipe, params)
