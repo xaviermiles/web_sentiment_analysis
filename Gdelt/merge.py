@@ -53,7 +53,7 @@ def merge_csvs_from_s3(mergefile, inkeys, bucket, headers, overwrite=False):
     
     print("Keys:")
     inkeys_l = len(inkeys)
-    for i, key in enumerate(inkeys[:1]):
+    for i, key in enumerate(inkeys):
         print(f"{i + 1} / {inkeys_l}")
         content = read_file_from_s3(bucket, key)
         with open(mergefile, mode='a') as f:
