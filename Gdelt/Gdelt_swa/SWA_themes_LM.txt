@@ -1,0 +1,47 @@
+housing - 
+
+['econ_housing_prices',
+ 'wb_612_housing_finance',
+ 'wb_817_land_and_housing',
+ 'wb_904_housing_markets',
+ 'wb_2186_social_housing',
+ 'wb_870_housing_construction',
+ 'wb_2187_rental_housing',
+ 'wb_1722_housing_policy_and_institutions',
+ 'wb_871_housing_subsidies',
+ 'wb_1594_housing_allowance',
+ 'wb_2188_affordable_housing_supply',
+ 'wb_2184_housing_finance_for_the_poor',
+ 'wb_869_housing_laws_and_regulations']
+ 
+ Unemployment - 
+ 
+ ['unemployment',
+ 'wb_2747_unemployment',
+ 'wb_1649_unemployment_benefits',
+ 'wb_2678_cyclical_unemployment',
+ 'wb_2809_unemployment_insurance_reforms',
+ 'econ_cost_of_living']
+
+
+ Mental - health - 
+ 
+ ['crisislex_c03_wellbeing_health',
+ 'wb_1430_mental_health',
+ 'tax_disease_mental_illness',
+ 'tax_disease_mental_disorders',
+ 'tax_fncact_mental_health_counselor',
+ 'tax_disease_mental_fatigue',
+ 'tax_disease_mental_disorder_of_mother']
+
+ wellbeing - 
+ 
+ ['crisislex_c03_wellbeing_health']
+
+ Covid Vaccination - 
+
+['health_vaccination',
+'tax_disease_coronavirus',
+ 'tax_disease_coronaviruses',
+ 'tax_disease_coronavirus_infections']
+
