@@ -104,21 +104,22 @@ def get_word_counts(text):
     return dict(word_counts)
 
 
-def get_avg_word_freqs(df, stops):
-    unique_words = set().union(*(d.keys() for d in df['Counts']))
-    filt_unique_words = unique_words - stops # remove stopwords
-    print(f"Includes {len(filt_unique_words)} unique words, ", end="", flush=True)
-    df['Num_words'] = df['Counts'].apply(len)
+# ORIGINAL METHOD
+# def get_avg_word_freqs(df, stops):
+#     unique_words = set().union(*(d.keys() for d in df['Counts']))
+#     filt_unique_words = unique_words - stops # remove stopwords
+#     print(f"Includes {len(filt_unique_words)} unique words, ", end="", flush=True)
+#     df['Num_words'] = df['Counts'].apply(len)
     
-    avg_word_freqs = {
-        word: np.array([
-            countsi.get(word, 0) / num_wordsi for countsi, num_wordsi in zip(df['Counts'], df['Num_words'])
-        ]).mean()
-        for word in filt_unique_words
-    }
-    print("Found avg_word_freqs, ", end="", flush=True)
+#     avg_word_freqs = {
+#         word: np.array([
+#             countsi.get(word, 0) / num_wordsi for countsi, num_wordsi in zip(df['Counts'], df['Num_words'])
+#         ]).mean()
+#         for word in filt_unique_words
+#     }
+#     print("Found avg_word_freqs, ", end="", flush=True)
     
-    return avg_word_freqs
+#     return avg_word_freqs
 
 
 def load_websites_df(batch, bucket):
@@ -155,13 +156,17 @@ def load_websites_df(batch, bucket):
     return websites
 
     
-def get_cluster_wclouds(batch, bucket, n_clusters):
-    if n_clusters < 1 or n_clusters > 127:
+def get_cluster_wclouds(batch, bucket, n_clusters, seed):
+    if n_clusters < 1 or n_clusters > 128:
         # Since cluster labels are stored as uint8 (possible values=0,1,...,127)
         # and "zero clusters" doesn't make sense.
         raise ValueError("n_clusters should be an integer between 1 & 127 (inclusive)")
     
-    clustered_sites_fpath = os.path.join("data", "clustered_websites.csv")
+    output_folder = os.path.join("site_agg_output", f"clusters{n_clusters}-seed{seed}")
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    
+    clustered_sites_fpath = os.path.join(output_folder, "clustered_websites.csv")
     if os.path.exists(clustered_sites_fpath):
         websites = pd.read_csv(clustered_sites_fpath,
                                dtype={'KM_cluster': 'uint8'})
@@ -169,24 +174,32 @@ def get_cluster_wclouds(batch, bucket, n_clusters):
         websites['Counts'] = [json.loads(counts_str.replace("'", '"'))
                               for counts_str in websites['Counts']]
         print("Loaded clustered websites from EC2")
+        
+        vectorizer = TfidfVectorizer(stop_words='english') # for getting cluster wclouds
+        X = vectorizer.fit_transform(websites['Text'])
+        print("Tfidf values obtained")
     else:
         websites = load_websites_df(batch, bucket)
 
         vectorizer = TfidfVectorizer(stop_words='english')
         X = vectorizer.fit_transform(websites['Text'])
-        km = KMeans(n_clusters=n_clusters, init='k-means++', random_state=777).fit(X)
+        print("Tfidf values obtained")
+        km = KMeans(n_clusters=n_clusters, init='k-means++', random_state=seed).fit(X)
         websites['KM_cluster'] = km.labels_.astype('uint8')
         print("Clustered websites")
         websites.to_csv(clustered_sites_fpath)
     
+    vectorizer_words = np.array(vectorizer.get_feature_names())
     print(websites.head())
     check_memory()
     
+    current_dt = (datetime.now() + timedelta(hours=12)).strftime("%Y%m%d%H%M%S") # add 12hrs for timezone
     stops = TfidfVectorizer(stop_words='english').get_stop_words()
     print("Got stopwords")
     # Produce wordcloud for each cluster
     fig, axes = plt.subplots(math.ceil(n_clusters / 3), 3, 
                              figsize=(24, 6 * math.ceil(n_clusters / 3)))
+    fig.suptitle(f"Clustering of websites with KMeans(n_clusters={n_clusters}, seed={seed})")
     ax = axes.ravel()
     for i in range(len(ax)):
         if i < n_clusters:
@@ -197,35 +210,49 @@ def get_cluster_wclouds(batch, bucket, n_clusters):
     for i in range(n_clusters):
         cluster_tstart = datetime.now()
         print(f"Wordcloud #{i + 1}, ", end="", flush=True)
-        cluster_websites = websites[websites['KM_cluster'] == i]
-        print(f"Includes {cluster_websites.shape[0]} websites, ", end="", flush=True)
+#         cluster_websites = websites[websites['KM_cluster'] == i]
+#         print(f"Includes {cluster_websites.shape[0]} websites, ", end="", flush=True)
         
-        # avg_word_freqs are saved in pickle format for later retrieval
-        avg_word_freqs_fpath = os.path.join("data", f"avg_word_freqs_cluster{i + 1}.p")
-        if os.path.exists(avg_word_freqs_fpath):
-            with open(avg_word_freqs_fpath, 'rb') as fp:
-                avg_word_freqs = pickle.load(fp)
-        else:
-            avg_word_freqs = get_avg_word_freqs(cluster_websites, stops)
-            with open(avg_word_freqs_fpath, 'wb') as fp:
-                pickle.dump(avg_word_freqs, fp, protocol=pickle.HIGHEST_PROTOCOL)
+        # ORIGINAL METHOD using each word's frequency averaged across documents - VERY SLOW
+#         # avg_word_freqs are saved in pickle format for later retrieval
+#         avg_word_freqs_fpath = os.path.join("data", f"avg_word_freqs_cluster{i + 1}.p")
+#         if os.path.exists(avg_word_freqs_fpath):
+#             with open(avg_word_freqs_fpath, 'rb') as fp:
+#                 avg_word_freqs = pickle.load(fp)
+#             print(f"Includes {len(avg_word_freqs)} unique words, ", end="", flush=True)
+#         else:
+#             avg_word_freqs = get_avg_word_freqs(cluster_websites, stops)
+#             with open(avg_word_freqs_fpath, 'wb') as fp:
+#                 pickle.dump(avg_word_freqs, fp, protocol=pickle.HIGHEST_PROTOCOL)
+#         cluster_wcloud = WordCloud(width=1800, height=1200, collocations=False).generate_from_frequencies(avg_word_freqs)
 
-        cluster_wcloud = WordCloud(width=1800, height=1200, collocations=False).generate_from_frequencies(avg_word_freqs)
-
+        # NEW METHOD using each word's tfidf values
+        TOP_N = 100
+        cluster_idx = websites[websites['KM_cluster'] == i].index.tolist()
+        norm_factor = X[cluster_idx, :].sum()
+        tfidf_per_word = X[cluster_idx, :].sum(axis=0) / norm_factor
+        # Get indices of the top 'n' tfidf values:
+        top_n_tfidf_idxs = np.argpartition(tfidf_per_word, -TOP_N)[:, -TOP_N:].tolist()[0]
+        word_to_tfidf = {
+            word: tfidf for word, tfidf in 
+            zip(vectorizer_words[top_n_tfidf_idxs], tfidf_per_word[:, top_n_tfidf_idxs].tolist()[0])
+        }
+        cluster_wcloud = WordCloud(width=1800, height=1200).generate_from_frequencies(word_to_tfidf)
+        
         ax[i].imshow(cluster_wcloud)
-        ax[i].set(title=f"KMeans Cluster #{i + 1} - {len(cluster_websites)} website(s)")
+        ax[i].set(title=f"KMeans Cluster #{i + 1} - {len(cluster_idx)} website(s)")
         
-        current_dt = (datetime.now() + timedelta(hours=12)).strftime("%Y%m%d%H%M%S") # add 12hrs for timezone
         cluster_tdelta = datetime.now() - cluster_tstart
+        print(f"Plotted, Time taken: {cluster_tdelta}")
         if i < (n_clusters - 1):
-            plt.savefig(f"plots/km_wclouds-WIP-{current_dt}.jpeg")
-            print(f"Plotted, Time taken: {cluster_tdelta}")
+            plt.savefig(os.path.join(output_folder, f"km_wclouds-WIP{i + 1}.jpeg"))
+            
         else:
-            plt.savefig(f"plots/km_wclouds-FINAL-{current_dt}.jpeg")
-            print(f"\nFully plotted, Time taken: {cluster_tdelta}")
+            plt.savefig(os.path.join(output_folder, "km_wclouds-FINAL.jpeg"))
+            print("Finished")
 
             
 if __name__ == "__main__":
     sess = boto3.Session(profile_name="xmiles")
     
-    get_cluster_wclouds("CC-MAIN-2021-10", "statsnz-covid-xmiles", 5)
+    get_cluster_wclouds("CC-MAIN-2021-10", "statsnz-covid-xmiles", 5, 777)
