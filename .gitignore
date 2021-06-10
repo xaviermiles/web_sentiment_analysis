@@ -7,6 +7,7 @@ commoncrawl/logs/
 
 commoncrawl/digital_economy/data/
 commoncrawl/digital_economy/results/
+commoncrawl/digital_economy/plots/
 commoncrawl/digital_economy/site_agg_output/
 commoncrawl/digital_economy/test_scraping_html/
 
