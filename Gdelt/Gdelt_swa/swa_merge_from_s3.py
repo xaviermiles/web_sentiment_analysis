@@ -19,7 +19,7 @@ col = ['gkg_id', 'date', 'source', 'source_name', 'doc_id',
 ]
 
 Year = [i for i in range(2015, 2022)]
-country = ['au', 'nz']
+country = ['au', 'nz', 'ca','uk']
 session = boto3.Session(profile_name='kandavar_processing')
 s3 = session.client('s3')
 bucket_name = 'statsnz-covid-kandavar'
@@ -40,10 +40,8 @@ def get_all_s3_objects(s3, **base_kwargs):
 def keyss(c, y):
     keys=[]
     for file in get_all_s3_objects(s3, Bucket=bucket_name, Prefix=f'G_from_2015/{c}/'):
-#         print(file['Key'])
         if file['Key'].split('/')[-1][:4] == f'{y}':
             n = "s3://" + bucket_name + "/"+ file['Key']
-#             print(n)
             keys.append(n)
     
     print(len(keys))
@@ -60,31 +58,30 @@ def merge2(keys):
     
     data = pd.concat((print_and_return_df(k) for k in keys))
     data.columns = col
-#     print(data.info())
     
     return data
 
 
-def upload_to_s3(data,y):
+def upload_to_s3(data,c,y):
     s3 = s3fs.core.S3FileSystem(anon=False, profile='kandavar_processing')
-    with s3.open(f's3://statsnz-covid-kandavar/G_from_2015/merged/gdelt_nz_{y}.csv','w') as f:
+    with s3.open(f's3://statsnz-covid-kandavar/G_from_2015/merged/gdelt_{c}_{y}.csv','w') as f:
         data.to_csv(f, index=False)
+    
+    del data
     print("uploaded")
     
 if __name__ == '__main__':
     
-    for y in Year[2:]:
-        start = time.time()
+    for c in country:
+        for y in Year:
+            start = time.time()
 
-        keys = keyss('nz', y)
-        
-#         with concurrent.futures.ThreadPoolExecutor(max_workers=35) as executor:
-#             executor.map(merge2, keys)
-        data = merge2(keys)
-        
-        end = time.time()
-        print(f"data merged for the year: {y} which took {round(end-start,2)} seconds")
-        upload_to_s3(data,y)
-#     data.to_csv("data.csv", index=False)
+            keys = keyss(c, y)
+
+            data = merge2(keys)
+
+            end = time.time()
+            print(f"data merged for the year: {y} which took {round(end-start,2)} seconds")
+            upload_to_s3(data,c,y)
 
 print('finished')

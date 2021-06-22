@@ -10,7 +10,7 @@ session = boto3.Session(profile_name='kandavar_processing')
 s3 = session.client('s3')
 bucket_name = 'statsnz-covid-kandavar'
 Year = [i for i in range(2015, 2022)]
-country = ['au','ca', 'uk', 'us']
+country = ['au','ca', 'uk', 'nz']
 
 Housing = ['econ_housing_prices',
  'wb_612_housing_finance',
@@ -43,10 +43,10 @@ Mental_health = ['crisislex_c03_wellbeing_health',
 
 Wellbeing = ['crisislex_c03_wellbeing_health']
 
-Covid_Vaccination =['health_vaccination',
-'tax_disease_coronavirus',
- 'tax_disease_coronaviruses',
- 'tax_disease_coronavirus_infections']
+Vaccination =['health_vaccination', 'wb_1459_immunizations']
+
+Coronavirus =['tax_disease_coronavirus', 'tax_disease_coronaviruses', 'tax_disease_coronavirus_infections']
+
 
 
 
@@ -59,17 +59,15 @@ def read_from_s3(filename,c):
     
     obj = s3.get_object(Bucket = bucket_name, Key = 'G_from_2015/merged/'+filename)
     
-    if c == 'au':
-        d = pd.read_csv(obj['Body'], parse_dates = ['date'], usecols = [2,4,6,10]) 
-    else:
-        d = pd.read_csv(obj['Body'], parse_dates = ['date'], usecols = [1,3,5,9])
 
-     # for au there is unnamed column at the start
+    d = pd.read_csv(obj['Body'], parse_dates = ['date'], usecols = [1,3,5,9])
+
      
     d['date'] = d.date.dt.date
     
     d['source_name'].dropna(inplace=True)
-    d['source_name'] = [x if f'.{c}' in str(x) else None for x in d.source_name]
+    d.dropna(subset = ['themes'], inplace = True)
+    d['source_name'] = [x if f'.{c}' in str(x) else None for x in d.source_name]          # filtering only 'from country news' eg Newzealand '.nz' domains
     d = d.mask(d['source_name'].eq('None')).dropna().reset_index(drop=True)
     
     print(f"Read - {filename}")
@@ -91,7 +89,7 @@ def themes_interest(df,t, t_name):
     return df
 
 def match_themes(df):
-    themes = {'Housing': Housing, 'Unemployment':Unemployment , 'Mental_health':Mental_health, 'Wellbeing':Wellbeing, 'Covid_Vaccination':Covid_Vaccination}
+    themes = {'Housing': Housing, 'Unemployment':Unemployment , 'Mental_health':Mental_health, 'Wellbeing':Wellbeing, 'Vaccination':Vaccination, 'Coronavirus': Coronavirus}
     print("Matching themes")
     for k,v in themes.items():
         df = themes_interest(df,v,k)
@@ -103,7 +101,7 @@ def match_themes(df):
 def filter_merge(df,c):
     
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
-    t1 = df.query('themes_filtered_Housing == "Housing"').resample('M', on='date').agg({'tone':[('housing', 'mean')], 'source_name': [('no.articles_housing', 'count')]}).reset_index()
+    t1 = df.query('themes_filtered_Housing == "Housing"').resample('M', on='date').agg({'tone':[('housing', 'mean')], 'source_name': [('no.articles_Housing', 'count')]}).reset_index()
     t1.columns = [col[1] for col in t1.columns.values]
     t1.columns.values[0] = 'date'
     
@@ -119,11 +117,15 @@ def filter_merge(df,c):
     t4.columns = [col[1] for col in t4.columns.values]
     t4.columns.values[0] = 'date'    
     
-    t5 = df.query('themes_filtered_Covid_Vaccination == "Covid_Vaccination"').resample('M', on='date').agg({'tone':[('Covid_Vaccination', 'mean')], 'source_name': [('no.articles_Covid_Vaccination', 'count')]}).reset_index()
+    t5 = df.query('themes_filtered_Vaccination == "Vaccination"').resample('M', on='date').agg({'tone':[('Vaccination', 'mean')], 'source_name': [('no.articles_Vaccination', 'count')]}).reset_index()
     t5.columns = [col[1] for col in t5.columns.values]
     t5.columns.values[0] = 'date'   
     
-    dfs = [t1,t2,t3,t4,t5]
+    t6 = df.query('themes_filtered_Coronavirus == "Coronavirus"').resample('M', on='date').agg({'tone':[('Coronavirus', 'mean')], 'source_name': [('no.articles_Coronavirus', 'count')]}).reset_index()
+    t6.columns = [col[1] for col in t6.columns.values]
+    t6.columns.values[0] = 'date'  
+    
+    dfs = [t1,t2,t3,t4,t5,t6]
     
 
     df = reduce(lambda left,right: pd.merge(left,right,on='date', how='outer'), dfs)
@@ -133,19 +135,17 @@ def filter_merge(df,c):
 
 def upload_to_s3(data,c,y):
     s3 = s3fs.core.S3FileSystem(anon=False, profile='kandavar_processing')
-    with s3.open(f's3://statsnz-covid-kandavar/G_from_2015/monthly/m_df_{c}_{y}.csv','w') as f:
+    with s3.open(f's3://statsnz-covid-kandavar/G_from_2015/monthly/m_df_{c}_{y}.csv','w') as f:               # df here stands for domain filter
         data.to_csv(f, index=False)
     print(f"uploaded-{c}{y}")  
 
 if __name__ == '__main__':
     
-    for c in ['nz']:
+    for c in country:
         start = time.time()
         for y in Year:
-            if c == 'au':
-                df = read_from_s3(f'data_{c}_{y}.csv', c)
-            else:
-                df = read_from_s3(f'gdelt_{c}_{y}.csv', c)
+
+            df = read_from_s3(f'gdelt_{c}_{y}.csv', c)
             
             df = themes_filter(df)
             df = match_themes(df)

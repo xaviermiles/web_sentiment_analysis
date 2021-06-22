@@ -8,8 +8,6 @@ import concurrent.futures
 from functools import partial
 import boto3
 import botocore
-# import spacy
-# nlp = spacy.load('en_core_web_lg')
 
 io.DEFAULT_BUFFER_SIZE = 8192*4
 
@@ -23,7 +21,7 @@ with open('gdelt2_master.txt', mode='wb') as localfile:
 
 # classification = ['c4.' + str(i) for i in range(1, 29)]
 # classification.sort()
-codes = ['c3.1', 'c3.2']#, 'c41.1', 'c41.2', 'c41.3',
+codes = ['c3.1', 'c3.2']#, 'c41.1', 'c41.2', 'c41.3',                                        # removed all features just to reduce the data size for processing
 #          'c6.4', 'c6.5', 'c6.6',
 #          'c7.1', 'c7.2', 'c8.1', 'c8.2', 'c8.3', 'c8.4', 'c8.5', 'c8.6', 'c8.7',
 #          'v10.1', 'v10.2', 'v11.1']
@@ -36,12 +34,11 @@ bucket_name = 'statsnz-covid-kandavar'
     
 
 def process_gkg(file_name):
-#     print(file_name)
 
     processed = []
     csv_file = file_name.split('/')[-1][:-4]
     date = file_name.split('/')[-1][:4]
-    Prefix='G_from_2015/nz/'
+    Prefix='G_from_2015/au/'                                   # change the country accordingly 
     
     if is_s3_key_valid(bucket_name, Prefix+csv_file): return
 
@@ -63,7 +60,7 @@ def process_gkg(file_name):
                     inc_nz = False
                     if locs == ['']: continue
                     for loc in locs:
-                        if loc.split('#')[3] == 'NZ':
+                        if loc.split('#')[3] == 'AS':             # add country of choice eg: for Australia it is 'AS'
                             inc_nz = True
                             break
                     if not inc_nz: continue
@@ -97,7 +94,6 @@ def process_gkg(file_name):
                 # Extract the important information
                     out[0:0] = line[15].split(',')
                     out[0:0] = itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line)
-#                         print(out)
                     processed.append(out)
                 if len(processed) > 0:
                      write_to_csv_s3(processed, "statsnz-covid-kandavar", csv_file)
@@ -132,10 +128,7 @@ def write_to_csv_s3(csv_list, bucket, csv_file):
         CSV file. (The elements of the inner lists will joined by commas and 
         the inner lists will then be joined by newlines.)
     """
-#     session = boto3.Session(profile_name='kandavar')
-#     s3 = session.client('s3') 
-    # double-quotes are used to enclose fields, so any double-quotes are 
-    # changed to single-quotes
+
     csvlist_str_elements = [
         ['"' + str(x).replace('"', "'") + '"' for x in row]
         for row in csv_list
@@ -143,9 +136,8 @@ def write_to_csv_s3(csv_list, bucket, csv_file):
     
     csv_rows = [','.join(row) for row in csvlist_str_elements]
     csv_str = '\n'.join(csv_rows) + '\n'
-    key = 'G_from_2015/nz/'+csv_file
+    key = 'G_from_2015/au/'+csv_file                                            # change the country to the respective folder eg for canada it is 'ca'
     s3.put_object(Body=csv_str, Bucket=bucket, Key=key)
-#     print("Success")
 
 
     
@@ -160,7 +152,7 @@ with open('gdelt2_master.txt') as f:
 if __name__ == '__main__':
 
 #     for f in gkg_files[200000:200019]: process_gkg(f)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=35) as executor:
         executor.map(process_gkg, gkg_files[::-1])
 
 print('finished')
