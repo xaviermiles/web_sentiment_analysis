@@ -11,8 +11,7 @@ commoncrawl/digital_economy/plots/
 commoncrawl/digital_economy/site_agg_output/
 commoncrawl/digital_economy/test_scraping_html/
 
-Gdelt/processed_gdelt2/
-Gdelt/gdelt2_master.txt
+Gdelt/eda_KA/gdelt2_master.txt
 
 twitter/twitter_log.txt
 
