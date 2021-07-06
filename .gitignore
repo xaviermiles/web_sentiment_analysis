@@ -15,7 +15,8 @@ Gdelt/eda_KA/gdelt2_master.txt
 
 twitter/twitter_log.txt
 
-# API keys
+# Config files
+s3_config.py
 twitter/twitter_config.py
 
 # Byte-compiled / optimized / DLL files
