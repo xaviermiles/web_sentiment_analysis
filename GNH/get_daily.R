@@ -8,25 +8,24 @@ library(rjson)
 source("GNH/load_api_config.R")  # loads API_CONFIG (list)
 
 
-get_daily_gnh_responses <- function(num_weeks_limit) {
-  # Must request 7 days at a time - starts one week ago (ie excludes current
-  # date) and moves backwards until there is nothing being returned.
-  # NB: first date with data is 2019-05-12 (ymd).
-  if (num_weeks_limit %% 1 != 0 || num_weeks_limit < 1) {
-    stop("num_weeks_limit should be a positive integer.")
+get_daily_gnh_responses <- function(start_date, end_date) {
+  # NB: Must request 7 days at a time - starts at end_date and moves backwards.
+  if (start_date > end_date) {
+    stop("start_date should be before end_date.")
+  } else if (end_date < ymd("2019-05-12")) {
+    stop("end_date should be >= 2019-05-12 (first date with data).")
   }
+  start_date <- max(start_date, ymd("2019-05-12"))  # first date with data
 
   api_url <- paste0(API_CONFIG[["base_url"]], "GetDailySentiments")
 
-  start_date <- today()
   responses <- list()
-
-  while (length(responses) < num_weeks_limit) {
-    start_date <- start_date - days(7)
+  current_date <- end_date
+  while (current_date >= start_date) {
     request_url <- parse_url(api_url)
     request_url$query <- list(
-      fromDate = start_date,
-      toDate = start_date + days(6)
+      fromDate = format(max(start_date, current_date - days(6)), "%Y-%m-%d"),
+      toDate = format(current_date, "%Y-%m-%d")
     )
     response <- request_url %>%
       build_url() %>%
@@ -39,25 +38,29 @@ get_daily_gnh_responses <- function(num_weeks_limit) {
       content(as = "text", encoding = "UTF-8") %>%
       fromJSON()
 
-    if (length(response) > 0) {
-      responses[[length(responses) + 1]] <- response
-    } else {
-      break
-    }
+    responses[[length(responses) + 1]] <- response
+    current_date <- current_date - weeks(1)
   }
   return(responses)
 }
 
-get_daily_gnh <- function(num_weeks_limit = 1) {
+get_daily_gnh <- function(start_date = NULL, end_date = NULL) {
   # The expected parameters and associated types are specified in the
   # DailySentiment schema.
+  if (is.null(end_date)) {
+    end_date <- today() - days(1)  # default: yesterday
+  }
+  if (is.null(start_date)) {
+    start_date <- end_date - days(6)  # default: gives one week data
+  }
+
   expected_parameters <- c(
     "country_code","tweet_at","tweet_at_year","tweet_at_month","tweet_at_day",
     "allTweets","totalPositiveTweets","totalNegativeTweets","gnh","gnH2"
   )
 
   daily_gnh <-
-    get_daily_gnh_responses(num_weeks_limit) %>%
+    get_daily_gnh_responses(start_date, end_date) %>%
     unlist(recursive = FALSE) %>%  # remove grouping of responses
     sapply(
       function(x) {
@@ -80,6 +83,7 @@ get_daily_gnh <- function(num_weeks_limit = 1) {
       totalNegativeTweets = as.numeric(totalNegativeTweets),
       gnh = as.numeric(gnh),
       gnH2 = as.numeric(gnH2)
-    )
+    ) %>%
+    arrange(country_code, tweet_at)
   return(daily_gnh_final)
 }
