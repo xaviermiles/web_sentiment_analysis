@@ -16,6 +16,7 @@ get_daily_gnh_responses <- function(start_date, end_date) {
     stop("end_date should be >= 2019-05-12 (first date with data).")
   }
   start_date <- max(start_date, ymd("2019-05-12"))  # first date with data
+  end_date <- min(end_date, today(tzone = "NZ") - days(1)) # up until yesterday
 
   api_url <- paste0(API_CONFIG[["base_url"]], "GetDailySentiments")
 
@@ -48,7 +49,7 @@ get_daily_gnh <- function(start_date = NULL, end_date = NULL) {
   # The expected parameters and associated types are specified in the
   # DailySentiment schema.
   if (is.null(end_date)) {
-    end_date <- today() - days(1)  # default: yesterday
+    end_date <- today(tzone = "NZ") - days(1)  # default: yesterday
   }
   if (is.null(start_date)) {
     start_date <- end_date - days(6)  # default: gives one week data
@@ -77,6 +78,7 @@ get_daily_gnh <- function(start_date = NULL, end_date = NULL) {
     mutate(
       tweet_at = ymd(tweet_at),
       tweet_at_year = as.integer(tweet_at_year),
+      tweet_at_month = as.integer(tweet_at_month),
       tweet_at_day = as.integer(tweet_at_day),
       allTweets = as.integer(allTweets),
       totalPositiveTweets = as.numeric(totalPositiveTweets),
