@@ -10,12 +10,13 @@ source("GNH/load_api_config.R")  # loads API_CONFIG (list)
 
 get_daily_gnh_responses <- function(start_date, end_date) {
   # NB: Must request 7 days at a time - starts at end_date and moves backwards.
+  FIRST_DATE <- ymd("2019-05-12")  # first date with data
   if (start_date > end_date) {
     stop("start_date should be before end_date.")
-  } else if (end_date < ymd("2019-05-12")) {
+  } else if (end_date < FIRST_DATE) {
     stop("end_date should be >= 2019-05-12 (first date with data).")
   }
-  start_date <- max(start_date, ymd("2019-05-12"))  # first date with data
+  start_date <- max(start_date, FIRST_DATE)
   end_date <- min(end_date, today(tzone = "NZ") - days(1)) # up until yesterday
 
   api_url <- paste0(API_CONFIG[["base_url"]], "GetDailySentiments")
