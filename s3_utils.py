@@ -26,20 +26,19 @@ def list_all_objects_s3(bucket, prefix, profile):
     """
     s3 = boto3.Session(profile_name=profile).client('s3')
     keys = []
-    truncated = True
     continuation_token = ""
 
-    while truncated:
+    while True:
         list_kwargs = dict(Bucket=bucket, Prefix=prefix)
         if continuation_token:
             list_kwargs['ContinuationToken'] = continuation_token
         resp = s3.list_objects_v2(**list_kwargs)
-        keys += [x['Key'] for x in resp['Contents']]
-
-        truncated = resp['IsTruncated']
-        if truncated:
-            continuation_token = resp['NextContinuationToken']
-            
+        keys += [x['Key'] for x in resp.get('Contents', [])]
+        
+        if not resp.get('IsTruncated'):
+            break
+        continuation_token = resp.get('NextContinuationToken')
+        
     return keys
             
 

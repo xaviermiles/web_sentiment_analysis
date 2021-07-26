@@ -1,6 +1,6 @@
 # COVID19 SENTIMENT ANALYSIS DOCS
 
-**NOTE THAT** for the scripts/notebooks to import from `s3_utils.py` (and other python files not in their directory), the local repository must be on the environment path. Easiest way is to add the top level of the local repository as PYTHONPATH in console, e.g. `export PYTHONPATH=~/web_sentiment_analysis/`, although this only enables the importing for your current session. Currently only scripts/notebooks in `Gdelt/quality_checks/` use this functionality, but there may be more in the future.
+**NOTE THAT** for the scripts/notebooks to import from `s3_utils.py` (and other python files not in their directory), the local repository must be on the environment path. Easiest way is to add the top level of the local repository as PYTHONPATH in console, e.g. `export PYTHONPATH=~/web_sentiment_analysis/`, although this only enables the importing for your current session. Currently only scripts/notebooks in `Gdelt/quality_checks/` and `Gdelt/process_v2` use this functionality, but there may be more in the future.
 
 ---
 ## Table of Contents
