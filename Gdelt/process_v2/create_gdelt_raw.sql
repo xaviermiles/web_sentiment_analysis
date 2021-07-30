@@ -1,0 +1,72 @@
+DROP TABLE IF EXISTS gdelt_raw;
+
+CREATE TABLE gdelt_raw (
+    -- Non-sentiment information about article
+    gkg_id                    VARCHAR(25) PRIMARY KEY,
+    date                      BIGINT      NOT NULL,
+    source                    INTEGER     NOT NULL,
+    source_name               TEXT        NOT NULL,
+    doc_id                    TEXT        NOT NULL,
+    themes                    TEXT[],
+    locations                 TEXT[][],
+    persons                   TEXT[],
+    orgs                      TEXT[],
+    --** should make into arrays (or nested arrays) at some point
+    -- "Core emotional dimensions" & wc - see 1.5TONE in GKG codebook for details
+    tone                      NUMERIC,
+    pos                       NUMERIC,
+    neg                       NUMERIC,
+    polarity                  NUMERIC,
+    ard                       NUMERIC,
+    srd                       NUMERIC,
+    wc                        INTEGER,
+    -- GCAM entries - see V2GCAM in GKG codebook for details
+    -- NB: INTEGER columns are count dimensions, REAL columns are value dimensions
+    -- Lexicoder sentiment dictionary
+    lexicode_neg              INTEGER,
+    lexicode_pos              INTEGER,
+    -- lexicoder Topic Dictionaries
+    macroeconomics            INTEGER,
+    energy                    INTEGER,
+    fisheries                 INTEGER,
+    transportation            INTEGER,
+    crime                     INTEGER,
+    social_welfare            INTEGER,
+    housing                   INTEGER,
+    finance                   INTEGER,
+    defence                   INTEGER,
+    sstc                      INTEGER,
+    foreign_trade             INTEGER,
+    civil_rights              INTEGER,
+    intl_rights               INTEGER,
+    govt_ops                  INTEGER,
+    land_water_management     INTEGER,
+    culture                   INTEGER,
+    prov_local                INTEGER,
+    intergovernmental         INTEGER,
+    constitutional_natl_unity INTEGER,
+    aboriginal                INTEGER,
+    religion                  INTEGER,
+    healthcare                INTEGER,
+    agriculture               INTEGER,
+    forestry                  INTEGER,
+    labour                    INTEGER,
+    immigration               INTEGER,
+    education                 INTEGER,
+    environment               INTEGER,
+    -- Central Bank Financial Stability Sentiment
+    finstab_pos               INTEGER,
+    finstab_neg               INTEGER,
+    finstab_neutral           INTEGER,
+    -- Loughran & McDonald Financial Sentiment
+    finsent_neg               INTEGER,
+    finsent_pos               INTEGER,
+    finsent_unc               INTEGER,  -- uncertainty
+    -- Opinion observer
+    opin_neg                  INTEGER,
+    opin_pos                  INTEGER,
+    -- SentiWord
+    sent_pos                  NUMERIC,
+    sent_neg                  NUMERIC,
+    sent_pol                  NUMERIC
+);

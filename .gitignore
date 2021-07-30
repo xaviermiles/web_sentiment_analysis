@@ -12,6 +12,7 @@ commoncrawl/digital_economy/site_agg_output/
 commoncrawl/digital_economy/test_scraping_html/
 
 Gdelt/eda_KA/gdelt2_master.txt
+Gdelt/data/
 
 twitter/twitter_log.txt
 
@@ -19,6 +20,7 @@ GNH/output/
 
 # Config files
 s3_config.py
+postgres_config.py
 twitter/twitter_config.py
 GNH/load_api_config.R
 
