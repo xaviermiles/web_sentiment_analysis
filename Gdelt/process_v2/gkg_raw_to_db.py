@@ -13,6 +13,7 @@ import requests, zipfile, io
 import re
 import psycopg2
 import concurrent.futures
+from datetime import datetime
 from operator import itemgetter
 
 import postgres_config
@@ -32,7 +33,7 @@ def check_dt_in_db(datetime):
     the datetime, format=YYYYmmddHHMMSS (14-long bigint)
     """
     exists_query = f"""
-    SELECT exists (SELECT 1 FROM gdelt_raw WHERE date = {datetime} LIMIT 1)
+    SELECT exists (SELECT 1 FROM gdelt_raw WHERE date = '{datetime}' LIMIT 1)
     """
     with psycopg2.connect(CONNECTION_DETAILS) as conn:
         with conn.cursor() as cur:
@@ -60,7 +61,8 @@ def get_gkg_files(update_master_list=True):
     with open(master_list_fpath) as f:
         gkg_files = [line.split(' ')[2][:-1] for line in f]
                     
-    return gkg_files
+    # flip order, so goes from most recent backwards
+    return gkg_files[::-1]
 
 
 def write_processed_to_db(processed):
@@ -91,11 +93,15 @@ def process_gkg(file_url):
     
     processed = []
     filename = file_url.split('/')[-1][:-4]
-    print(filename)
-    file_datetime = re.match(r'(\d{14}).gkg.csv', filename).group(1)
+    file_datetime = datetime.strptime(
+        re.match(r'(\d{14}).gkg.csv', filename).group(1),
+        '%Y%m%d%H%M%S'
+    )
     if check_dt_in_db(file_datetime):
         # database has rows with datetime corresponding to raw GKG file
+        print(filename, 'skipping')
         return
+    print(filename)
     r = requests.get(file_url, stream=True)
     
     try:
@@ -148,6 +154,7 @@ def process_gkg(file_url):
                     out[0:0] = itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line)
                     
                     # Split appropriate fields into arrays for database
+                    out[1] = datetime.strptime(out[1], '%Y%m%d%H%M%S')
                     out[5] = out[5].split(';') if out[5] else []
                     out[6] = [
                         loc.split('#') for loc in out[6].split(';')
@@ -170,11 +177,11 @@ def process_gkg(file_url):
 if __name__ == '__main__':
     gkg_files = get_gkg_files()
     
-    for f in gkg_files[::-1]: 
+    for f in gkg_files[:10]: 
         process_gkg(f)
     # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
     #     executor.map(process_gkg, gkg_files)#[::-1])
-    process_gkg(gkg_files[2])
+    # process_gkg(gkg_files[2])
     
     import check_gdelt_raw
     check_gdelt_raw.main()

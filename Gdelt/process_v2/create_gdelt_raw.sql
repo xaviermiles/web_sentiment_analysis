@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS gdelt_raw;
 CREATE TABLE gdelt_raw (
     -- Non-sentiment information about article
     gkg_id                    VARCHAR(25) PRIMARY KEY,
-    date                      BIGINT      NOT NULL,
+    datetime                  TIMESTAMP   NOT NULL,
     source                    INTEGER     NOT NULL,
     source_name               TEXT        NOT NULL,
     doc_id                    TEXT        NOT NULL,
