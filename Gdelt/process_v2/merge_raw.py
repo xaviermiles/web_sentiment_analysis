@@ -23,10 +23,14 @@ def get_gdelt_raw_keys(country_code, year, bucket):
 
 def merge_gdelt_raw(bucket, inkeys, outkey, header):
     fs = s3fs.S3FileSystem(profile=S3_PROFILE)
-    merged = pd.concat((
-        pd.read_csv(fs.open(f"s3://{bucket}/{key}", header=None))
-        for key in inkeys
-    ))
+    def print_and_return(key):
+        print(key)
+        return pd.read_csv(fs.open(f"s3://{bucket}/{key}"), header=None)
+    merged = pd.concat((print_and_return(key) for key in inkeys))
+#     merged = pd.concat((
+#         pd.read_csv(fs.open(f"s3://{bucket}/{key}", header=None))
+#         for key in inkeys
+#     ))
     merged.columns = header
     
     print(merged.head())
@@ -40,7 +44,7 @@ def clean_merged_gdelt_raw(merged, bucket, outkey):
     daily = merged.groupby(
         date,
         pos, neg, wc  # to try to control for syndicated articles
-    )
+    )[NONID_GDELT_HEADERS].mean()
     
     with fs.open(f"s3://{bucket}/{outkey}", 'w') as f:
         daily.to_csv(f, index=False)
@@ -70,7 +74,7 @@ if __name__ == "__main__":
             print(f" {len(keys)} keys", end='', flush=True)
                
             merged_outkey = f'gdelt_merged/merged-{country}-{year}.csv'
-            merged = merge_gdelt_raw(s3_bucket, keys, raw_gdelt_headers)
+            merged = merge_gdelt_raw(s3_bucket, keys, merged_outkey, raw_gdelt_headers)
             print(", merged", end='', flush=True)
             
             daily_outkey = f'gdelt_daily/daily-{country}-{year}.csv'

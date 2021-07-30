@@ -1,7 +1,10 @@
-RAW_GDELT_HEADERS = [
+ID_GDELT_HEADERS = [
     # Non-sentiment information about article
-    'gkg_id', 'date', 'source', 'source_name', 'doc_id', 
-    'themes', 'locations', 'persons', 'orgs', 
+    'gkg_id', 'date', 'source', 'source_name', 'doc_id',
+    'themes', 'locations', 'persons', 'orgs'
+]
+
+NONID_GDELT_HEADERS = [
     # "Core emotional dimensions" & wc - see 1.5TONE in GKG codebook for details
     'tone',  # pos - neg
     'pos',  # % of words with "positive emotional connotation"
@@ -34,3 +37,5 @@ RAW_GDELT_HEADERS = [
     # SentiWord
     'sent_pos', 'sent_neg', 'sent_pol'
 ]
+
+RAW_GDELT_HEADERS = ID_GDELT_HEADERS + NONID_GDELT_HEADERS
