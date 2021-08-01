@@ -171,17 +171,14 @@ def process_gkg(file_url):
                 # convert 'out' from list to tuple for psycopg2 function
                 processed.append(tuple(out))
             
-            print(len(processed))
             if len(processed) > 0:
-                print(processed[0][6])
-                print(len(processed[0]))
                 write_processed_to_db(processed)
     
 
 if __name__ == '__main__':
     # Construct namedtuple that will be cast into locations_item for database
     Loc_Item = namedtuple(
-        'locations_item',
+        'location_item',
         'type full_name country_code ADM1_code lat long feature_id'
     )
     class Loc_Item_Adapter:
@@ -190,7 +187,7 @@ if __name__ == '__main__':
         def prepare(self, conn):
             self.adapted.prepare(conn)
         def getquoted(self):
-            return self.adapted.getquoted() + b'::locations_item'
+            return self.adapted.getquoted() + b'::location_item'
     psycopg2.extensions.register_adapter(Loc_Item, Loc_Item_Adapter)
     
     gkg_files = get_gkg_files()
