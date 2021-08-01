@@ -1,5 +1,15 @@
 DROP TABLE IF EXISTS gdelt_raw;
 
+CREATE TYPE locations_item AS (
+    type         INTEGER,
+    full_name    TEXT,
+    country_code TEXT,
+    ADM1_code    TEXT,
+    lat          NUMERIC,
+    long         NUMERIC,
+    feature_id   TEXT
+);
+
 CREATE TABLE gdelt_raw (
     -- Non-sentiment information about article
     gkg_id                    VARCHAR(25) PRIMARY KEY,
@@ -8,10 +18,9 @@ CREATE TABLE gdelt_raw (
     source_name               TEXT        NOT NULL,
     doc_id                    TEXT        NOT NULL,
     themes                    TEXT[],
-    locations                 TEXT[][],
+    locations                 locations_item[],
     persons                   TEXT[],
     orgs                      TEXT[],
-    --** should make into arrays (or nested arrays) at some point
     -- "Core emotional dimensions" & wc - see 1.5TONE in GKG codebook for details
     tone                      NUMERIC,
     pos                       NUMERIC,
@@ -21,7 +30,7 @@ CREATE TABLE gdelt_raw (
     srd                       NUMERIC,
     wc                        INTEGER,
     -- GCAM entries - see V2GCAM in GKG codebook for details
-    -- NB: INTEGER columns are count dimensions, REAL columns are value dimensions
+    -- NB: INTEGER are count dimensions, REAL are value dimensions
     -- Lexicoder sentiment dictionary
     lexicode_neg              INTEGER,
     lexicode_pos              INTEGER,

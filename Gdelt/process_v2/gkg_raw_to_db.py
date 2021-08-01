@@ -12,9 +12,11 @@
 import requests, zipfile, io
 import re
 import psycopg2
+from psycopg2 import extras
 import concurrent.futures
 from datetime import datetime
 from operator import itemgetter
+from collections import namedtuple
 
 import postgres_config
 
@@ -30,10 +32,11 @@ CONNECTION_DETAILS = (
 
 def check_dt_in_db(datetime):
     """Returns boolean indicating whether the database contains any rows with 
-    the datetime, format=YYYYmmddHHMMSS (14-long bigint)
+    the given datetime (format=YYYYmmddHHMMSS; 14-long bigint)
     """
     exists_query = f"""
-    SELECT exists (SELECT 1 FROM gdelt_raw WHERE date = '{datetime}' LIMIT 1)
+    SELECT exists 
+    (SELECT 1 FROM gdelt_raw WHERE datetime = '{datetime}' LIMIT 1)
     """
     with psycopg2.connect(CONNECTION_DETAILS) as conn:
         with conn.cursor() as cur:
@@ -41,7 +44,7 @@ def check_dt_in_db(datetime):
                 cur.execute(exists_query)
                 dt_in_db = cur.fetchone()[0]
             except Exception as e:
-                print(f"Exception executing SQL: {e}")
+                print(f"Exception executing Select Query: {e}")
                 print(f"Exception type: {type(e)}")
     
     return dt_in_db
@@ -61,11 +64,12 @@ def get_gkg_files(update_master_list=True):
     with open(master_list_fpath) as f:
         gkg_files = [line.split(' ')[2][:-1] for line in f]
                     
-    # flip order, so goes from most recent backwards
+    # flip order, so goes from most recent to least recent
     return gkg_files[::-1]
 
 
 def write_processed_to_db(processed):
+    num_columns = len(processed[0])
     insert_query = (
         "INSERT INTO gdelt_raw VALUES " +
         ','.join(['%s'] * len(processed))
@@ -73,10 +77,11 @@ def write_processed_to_db(processed):
     with psycopg2.connect(CONNECTION_DETAILS) as conn:
         conn.autocommit = True
         with conn.cursor() as cur:
+            extras.register_composite('locations_item', cur)
             try:
                 cur.execute(insert_query, processed)
             except Exception as e:
-                print(f"Exception executing SQL: {e}")
+                print(f"Exception executing Insert Query: {e}")
                 print(f"Exception type: {type(e)}")
         
 
@@ -104,86 +109,96 @@ def process_gkg(file_url):
     print(filename)
     r = requests.get(file_url, stream=True)
     
-    try:
-        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
-            with zf.open(filename, 'r') as infile:
-                for raw in io.TextIOWrapper(infile, encoding='latin-1'):
-                    line = raw.split('\t')
-                    if len(line) < 10: continue
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        with zf.open(filename, 'r') as infile:
+            for raw in io.TextIOWrapper(infile, encoding='latin-1'):
+                line = raw.split('\t')
+                if len(line) < 10: continue
 
-                    # Keep stories which reference NZ as a location
-                    locs = line[9].split(';')
-                    inc_nz = False
-                    if locs == ['']: continue
-                    for loc in locs:
-                        if loc.split('#')[3] == 'NZ':
-                            inc_nz = True
-                            break
-                    if not inc_nz: continue
+                # Keep stories which reference NZ as a location
+                locs = line[9].split(';')
+                inc_nz = False
+                if locs == ['']: continue
+                for loc in locs:
+                    if loc.split('#')[3] == 'NZ':
+                        inc_nz = True
+                        break
+                if not inc_nz: continue
 
-                    # Extract the relevant codes
-                    gcam = line[17].split(',')
-                    code_i = 0
-                    code_v = codes[code_i]
-                    code_l = len(code_v)
-                    out = []
-                    # skip gcam[0] as is word count, not gcam code
-                    for el in gcam[1:]:
+                # Extract the relevant codes
+                gcam = line[17].split(',')
+                code_i = 0
+                code_v = codes[code_i]
+                code_l = len(code_v)
+                out = []
+                # skip gcam[0] as is word count, not gcam code
+                for el in gcam[1:]:
 
-                        gcode, val = el.split(':')
+                    gcode, val = el.split(':')
 
-                        # print(gcode, code_v, code_v == gcode)
+                    # print(gcode, code_v, code_v == gcode)
 
-                        while code_v < gcode:
-                            out.append(None)
-                            code_i += 1
-                            if (code_i == codes_l - 1): break
-                            code_v = codes[code_i]
-
-                        if code_v == gcode:
-                            out.append(val)
-                            code_i += 1
-                            if (code_i == codes_l - 1): break
-                            code_v = codes[code_i]
-
-                    if (len(codes) == len(out) + 1): 
+                    while code_v < gcode:
                         out.append(None)
+                        code_i += 1
+                        if (code_i == codes_l - 1): break
+                        code_v = codes[code_i]
 
-                    # Extract the conextual/non-code info. about article
-                    out[0:0] = line[15].split(',')  # V1.5TONE
-                    out[0:0] = itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line)
-                    
-                    # Split appropriate fields into arrays for database
-                    out[1] = datetime.strptime(out[1], '%Y%m%d%H%M%S')
-                    out[5] = out[5].split(';') if out[5] else []
-                    out[6] = [
-                        loc.split('#') for loc in out[6].split(';')
-                    ] if out[6] else [[]]
-                    out[7] = out[7].split(';') if out[7] else []
-                    out[8] = out[8].split(';') if out[8] else []
-                    # convert 'out' from list to tuple for psycopg2 function
-                    processed.append(tuple(out))
+                    if code_v == gcode:
+                        out.append(val)
+                        code_i += 1
+                        if (code_i == codes_l - 1): break
+                        code_v = codes[code_i]
+
+                if (len(codes) == len(out) + 1): 
+                    out.append(None)
+
+                # Extract the conextual/non-code info. about article
+                out[0:0] = line[15].split(',')  # V1.5TONE
+                out[0:0] = itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line)
                 
-                print(len(processed))
-                if len(processed) > 0:
-                    write_processed_to_db(processed)
-                    
-                return True
-    except Exception as e:
-        print(e)
-        return False
+                # Split appropriate fields into arrays for database
+                out[1] = datetime.strptime(out[1], '%Y%m%d%H%M%S')
+                out[5] = [x for x in out[5].split(';') if x] if out[5] else []
+                loc_dtypes = [int, str, str, str, float, float, str]
+                out[6] = [
+                    Loc_Item(*[new_dtype(item) for item, new_dtype in zip(loc.split('#'), loc_dtypes)])
+                    for loc in out[6].split(';')
+                ] if out[6] else []
+                # out[6] = f"ARRAY{out[6]}::locations_item[]"
+                out[7] = [x for x in out[7].split(';') if x] if out[7] else []
+                out[8] = [x for x in out[8].split(';') if x] if out[8] else []
+                # convert 'out' from list to tuple for psycopg2 function
+                processed.append(tuple(out))
+            
+            print(len(processed))
+            if len(processed) > 0:
+                print(processed[0][6])
+                print(len(processed[0]))
+                write_processed_to_db(processed)
     
 
 if __name__ == '__main__':
+    # Construct namedtuple that will be cast into locations_item for database
+    Loc_Item = namedtuple(
+        'locations_item',
+        'type full_name country_code ADM1_code lat long feature_id'
+    )
+    class Loc_Item_Adapter:
+        def __init__(self, x):
+            self.adapted = psycopg2.extensions.SQL_IN(x)
+        def prepare(self, conn):
+            self.adapted.prepare(conn)
+        def getquoted(self):
+            return self.adapted.getquoted() + b'::locations_item'
+    psycopg2.extensions.register_adapter(Loc_Item, Loc_Item_Adapter)
+    
     gkg_files = get_gkg_files()
     
-    for f in gkg_files[:10]: 
+    for f in gkg_files[3:4]: 
         process_gkg(f)
     # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
     #     executor.map(process_gkg, gkg_files)#[::-1])
     # process_gkg(gkg_files[2])
-    
-    import check_gdelt_raw
-    check_gdelt_raw.main()
 
     print('finished')
