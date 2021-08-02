@@ -50,6 +50,17 @@ def check_dt_in_db(datetime):
     return dt_in_db
 
 
+def get_loc_item(loc_item_str):
+    loc_dtypes = [int, str, str, str, float, float, str]
+    parts = loc_item_str.split('#')
+    converted_parts = [
+        new_dtype(item) if item != '' else None 
+        for item, new_dtype in zip(parts, loc_dtypes)
+    ]
+    loc_item = Loc_Item(*converted_parts)
+    return loc_item
+
+
 def get_gkg_files(update_master_list=True):
     master_list_fpath = '../data/gdelt2_master.txt'
     
@@ -85,7 +96,7 @@ def write_processed_to_db(processed):
                 print(f"Exception type: {type(e)}")
         
 
-def process_gkg(file_url):
+def process_gkg(file_url, countries_of_interest):
     codes = [
         'c3.1', 'c3.2',
         *sorted(['c4.' + str(i) for i in range(1, 29)]),
@@ -115,15 +126,22 @@ def process_gkg(file_url):
                 line = raw.split('\t')
                 if len(line) < 10: continue
 
-                # Keep stories which reference NZ as a location
+                # Keep stories which reference any *country of interest*
                 locs = line[9].split(';')
                 inc_nz = False
-                if locs == ['']: continue
+                if locs == ['']: 
+                    continue  # no locations detected by gdelt
+                
+                relevant_codes = []
                 for loc in locs:
-                    if loc.split('#')[3] == 'NZ':
-                        inc_nz = True
-                        break
-                if not inc_nz: continue
+                    country_code = loc.split('#')[3]
+                    if country_code in countries_of_interest:
+                        relevant_codes.append(country_code)
+                if len(relevant_codes) == 0: 
+                    continue  # no countries of interest mentioned
+                c_item = Countries_Item(
+                    *[code in relevant_codes for code in countries_of_interest]
+                )
 
                 # Extract the relevant codes
                 gcam = line[17].split(',')
@@ -153,23 +171,23 @@ def process_gkg(file_url):
                 if (len(codes) == len(out) + 1): 
                     out.append(None)
 
-                # Extract the conextual/non-code info. about article
-                out[0:0] = line[15].split(',')  # V1.5TONE
-                out[0:0] = itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line)
-                
-                # Split appropriate fields into arrays for database
-                out[1] = datetime.strptime(out[1], '%Y%m%d%H%M%S')
-                out[5] = [x for x in out[5].split(';') if x] if out[5] else []
-                loc_dtypes = [int, str, str, str, float, float, str]
-                out[6] = [
-                    Loc_Item(*[new_dtype(item) for item, new_dtype in zip(loc.split('#'), loc_dtypes)])
-                    for loc in out[6].split(';')
-                ] if out[6] else []
-                # out[6] = f"ARRAY{out[6]}::locations_item[]"
-                out[7] = [x for x in out[7].split(';') if x] if out[7] else []
-                out[8] = [x for x in out[8].split(';') if x] if out[8] else []
-                # convert 'out' from list to tuple for psycopg2 function
-                processed.append(tuple(out))
+                # Construct row for database table
+                row = [
+                    *itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line),  # article info.
+                    c_item,                                          # countries_item
+                    *line[15].split(','),                            # V1.5TONE
+                    *out                                             # V2GCAM codes
+                ]
+                # Reshaping fields into appropriate data types
+                row[1] = datetime.strptime(row[1], '%Y%m%d%H%M%S')
+                row[5] = [x for x in row[5].split(';') if x] if row[5] else []
+                row[6] = [
+                    get_loc_item(loc) for loc in row[6].split(';')
+                ] if row[6] else []
+                row[7] = [x for x in row[7].split(';') if x] if row[7] else []
+                row[8] = [x for x in row[8].split(';') if x] if row[8] else []
+                # Convert 'row' from list to tuple for psycopg2 function
+                processed.append(tuple(row))
             
             if len(processed) > 0:
                 write_processed_to_db(processed)
@@ -189,11 +207,25 @@ if __name__ == '__main__':
         def getquoted(self):
             return self.adapted.getquoted() + b'::location_item'
     psycopg2.extensions.register_adapter(Loc_Item, Loc_Item_Adapter)
+    # namedtuple for countries_item
+    countries_of_interest = ['NZ', 'AS', 'CA', 'UK']
+    Countries_Item = namedtuple(
+        'countries_item', ' '.join(countries_of_interest)
+    )
+    class Countries_Item_Adapter:
+        def __init__(self, x):
+            self.adapted = psycopg2.extensions.SQL_IN(x)
+        def prepare(self, conn):
+            self.adapted.prepare(conn)
+        def getquoted(self):
+            return self.adapted.getquoted() + b'::countries_item'
+    psycopg2.extensions.register_adapter(Countries_Item, Countries_Item_Adapter)
+    
     
     gkg_files = get_gkg_files()
     
     for f in gkg_files[3:4]: 
-        process_gkg(f)
+        process_gkg(f, countries_of_interest)
     # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
     #     executor.map(process_gkg, gkg_files)#[::-1])
     # process_gkg(gkg_files[2])
