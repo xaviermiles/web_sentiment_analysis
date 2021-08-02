@@ -1,6 +1,5 @@
 DROP TABLE IF EXISTS gdelt_raw;
 DROP TYPE IF EXISTS location_item;
-DROP TYPE IF EXISTS countries_item;
 
 CREATE TYPE location_item AS (
     type         INTEGER,
@@ -10,13 +9,6 @@ CREATE TYPE location_item AS (
     lat          NUMERIC,
     long         NUMERIC,
     feature_id   TEXT
-);
-
-CREATE TYPE countries_item AS (
-    NZ    BOOLEAN,
-    AU    BOOLEAN,
-    CA    BOOLEAN,
-    UK    BOOLEAN
 );
 
 CREATE TABLE gdelt_raw (
@@ -30,7 +22,7 @@ CREATE TABLE gdelt_raw (
     locations                 location_item[],
     persons                   TEXT[],
     orgs                      TEXT[],
-    countries                 countries_item,
+    countries                 VARCHAR(2)[],
     -- "Core emotional dimensions" & wc - see 1.5TONE in GKG codebook for details
     tone                      NUMERIC,
     pos                       NUMERIC,

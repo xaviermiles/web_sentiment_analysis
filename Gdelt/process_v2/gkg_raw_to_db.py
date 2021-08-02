@@ -88,7 +88,7 @@ def write_processed_to_db(processed):
     with psycopg2.connect(CONNECTION_DETAILS) as conn:
         conn.autocommit = True
         with conn.cursor() as cur:
-            extras.register_composite('locations_item', cur)
+            extras.register_composite('location_item', cur)
             try:
                 cur.execute(insert_query, processed)
             except Exception as e:
@@ -139,9 +139,6 @@ def process_gkg(file_url, countries_of_interest):
                         relevant_codes.append(country_code)
                 if len(relevant_codes) == 0: 
                     continue  # no countries of interest mentioned
-                c_item = Countries_Item(
-                    *[code in relevant_codes for code in countries_of_interest]
-                )
 
                 # Extract the relevant codes
                 gcam = line[17].split(',')
@@ -174,7 +171,7 @@ def process_gkg(file_url, countries_of_interest):
                 # Construct row for database table
                 row = [
                     *itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line),  # article info.
-                    c_item,                                          # countries_item
+                    relevant_codes,                                  # countries
                     *line[15].split(','),                            # V1.5TONE
                     *out                                             # V2GCAM codes
                 ]
@@ -194,7 +191,9 @@ def process_gkg(file_url, countries_of_interest):
     
 
 if __name__ == '__main__':
-    # Construct namedtuple that will be cast into locations_item for database
+    countries_of_interest = ['NZ', 'AS', 'CA', 'UK']
+    
+    # Construct namedtuple that will be cast into location_item for database
     Loc_Item = namedtuple(
         'location_item',
         'type full_name country_code ADM1_code lat long feature_id'
@@ -207,24 +206,10 @@ if __name__ == '__main__':
         def getquoted(self):
             return self.adapted.getquoted() + b'::location_item'
     psycopg2.extensions.register_adapter(Loc_Item, Loc_Item_Adapter)
-    # namedtuple for countries_item
-    countries_of_interest = ['NZ', 'AS', 'CA', 'UK']
-    Countries_Item = namedtuple(
-        'countries_item', ' '.join(countries_of_interest)
-    )
-    class Countries_Item_Adapter:
-        def __init__(self, x):
-            self.adapted = psycopg2.extensions.SQL_IN(x)
-        def prepare(self, conn):
-            self.adapted.prepare(conn)
-        def getquoted(self):
-            return self.adapted.getquoted() + b'::countries_item'
-    psycopg2.extensions.register_adapter(Countries_Item, Countries_Item_Adapter)
-    
     
     gkg_files = get_gkg_files()
     
-    for f in gkg_files[3:4]: 
+    for f in gkg_files[:50]: 
         process_gkg(f, countries_of_interest)
     # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
     #     executor.map(process_gkg, gkg_files)#[::-1])
