@@ -9,14 +9,18 @@
 #     'amounts', 'translation', 'extra'
 # ]
 
-import requests, zipfile, io
+import io, zipfile
 import re
-import psycopg2
-from psycopg2 import extras
 import concurrent.futures
+
 from datetime import datetime
 from operator import itemgetter
+from itertools import repeat
 from collections import namedtuple
+
+import requests
+import psycopg2
+from psycopg2 import extras
 
 import postgres_config
 
@@ -114,9 +118,8 @@ def process_gkg(file_url, countries_of_interest):
         '%Y%m%d%H%M%S'
     )
     if check_dt_in_db(file_datetime):
-        # database has rows with datetime corresponding to raw GKG file
-        print(filename, 'skipping')
-        return
+        # database already has rows with datetime matching this raw GKG file
+        return False
     print(filename)
     r = requests.get(file_url, stream=True)
     
@@ -189,6 +192,8 @@ def process_gkg(file_url, countries_of_interest):
             if len(processed) > 0:
                 write_processed_to_db(processed)
     
+    return True
+    
 
 if __name__ == '__main__':
     countries_of_interest = ['NZ', 'AS', 'CA', 'UK']
@@ -208,11 +213,15 @@ if __name__ == '__main__':
     psycopg2.extensions.register_adapter(Loc_Item, Loc_Item_Adapter)
     
     gkg_files = get_gkg_files()
+    print(f"Processing up to {len(gkg_files)} files.")
     
-    for f in gkg_files[:50]: 
-        process_gkg(f, countries_of_interest)
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-    #     executor.map(process_gkg, gkg_files)#[::-1])
-    # process_gkg(gkg_files[2])
-
-    print('finished')
+    start = datetime.now()
+    # for f in gkg_files[:100]: 
+    #     process_gkg(f, countries_of_interest)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        processed = list(
+            executor.map(process_gkg, gkg_files[:100],
+                         repeat(countries_of_interest))
+        )
+    print(f"Actually processed {sum(processed)} files. Time taken:", 
+          datetime.now() - start)
