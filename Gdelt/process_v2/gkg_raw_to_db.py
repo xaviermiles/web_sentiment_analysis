@@ -101,6 +101,12 @@ def write_processed_to_db(processed):
         
 
 def process_gkg(file_url, countries_of_interest):
+    """
+    Returns
+    - True if processed and uploaded to DB successfully
+    - False if contents of raw file is already in DB
+    - None if Exception thrown
+    """
     codes = [
         'c3.1', 'c3.2',
         *sorted(['c4.' + str(i) for i in range(1, 29)]),
@@ -123,76 +129,76 @@ def process_gkg(file_url, countries_of_interest):
     print(filename)
     r = requests.get(file_url, stream=True)
     
-    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
-        with zf.open(filename, 'r') as infile:
-            for raw in io.TextIOWrapper(infile, encoding='latin-1'):
-                line = raw.split('\t')
-                if len(line) < 10: continue
-
-                # Keep stories which reference any *country of interest*
-                locs = line[9].split(';')
-                inc_nz = False
-                if locs == ['']: 
-                    continue  # no locations detected by gdelt
-                
-                relevant_codes = []
-                for loc in locs:
-                    country_code = loc.split('#')[3]
-                    if country_code in countries_of_interest:
-                        relevant_codes.append(country_code)
-                if len(relevant_codes) == 0: 
-                    continue  # no countries of interest mentioned
-
-                # Extract the relevant codes
-                gcam = line[17].split(',')
-                code_i = 0
-                code_v = codes[code_i]
-                code_l = len(code_v)
-                out = []
-                # skip gcam[0] as is word count, not gcam code
-                for el in gcam[1:]:
-
-                    gcode, val = el.split(':')
-
-                    # print(gcode, code_v, code_v == gcode)
-
-                    while code_v < gcode:
-                        out.append(None)
-                        code_i += 1
-                        if (code_i == codes_l - 1): break
-                        code_v = codes[code_i]
-
-                    if code_v == gcode:
-                        out.append(val)
-                        code_i += 1
-                        if (code_i == codes_l - 1): break
-                        code_v = codes[code_i]
-
-                if (len(codes) == len(out) + 1): 
-                    out.append(None)
-
-                # Construct row for database table
-                row = [
-                    *itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line),  # article info.
-                    relevant_codes,                                  # countries
-                    *line[15].split(','),                            # V1.5TONE
-                    *out                                             # V2GCAM codes
-                ]
-                # Reshaping fields into appropriate data types
-                row[1] = datetime.strptime(row[1], '%Y%m%d%H%M%S')
-                row[5] = [x for x in row[5].split(';') if x] if row[5] else []
-                row[6] = [
-                    get_loc_item(loc) for loc in row[6].split(';')
-                ] if row[6] else []
-                row[7] = [x for x in row[7].split(';') if x] if row[7] else []
-                row[8] = [x for x in row[8].split(';') if x] if row[8] else []
-                # Convert 'row' from list to tuple for psycopg2 function
-                processed.append(tuple(row))
-            
-            if len(processed) > 0:
-                write_processed_to_db(processed)
+    try:
+        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+            with zf.open(filename, 'r') as infile:
+                for raw in io.TextIOWrapper(infile, encoding='latin-1'):
+                    line = raw.split('\t')
+                    if len(line) < 10: continue
     
-    return True
+                    # Keep stories which reference any *country of interest*
+                    locs = line[9].split(';')
+                    inc_nz = False
+                    if locs == ['']: 
+                        continue  # no locations detected by gdelt
+                    
+                    relevant_codes = []
+                    for loc in locs:
+                        country_code = loc.split('#')[3]
+                        if country_code in countries_of_interest:
+                            relevant_codes.append(country_code)
+                    if len(relevant_codes) == 0: 
+                        continue  # no countries of interest mentioned
+    
+                    # Extract the relevant codes
+                    gcam = line[17].split(',')
+                    code_i = 0
+                    code_v = codes[code_i]
+                    code_l = len(code_v)
+                    out = []
+                    # skip gcam[0] as is word count, not gcam code
+                    for el in gcam[1:]:
+                        gcode, val = el.split(':')
+    
+                        while code_v < gcode:
+                            out.append(None)
+                            code_i += 1
+                            if (code_i == codes_l - 1): break
+                            code_v = codes[code_i]
+    
+                        if code_v == gcode:
+                            out.append(val)
+                            code_i += 1
+                            if (code_i == codes_l - 1): break
+                            code_v = codes[code_i]
+    
+                    if (len(codes) == len(out) + 1): 
+                        out.append(None)
+    
+                    # Construct row for database table
+                    row = [
+                        *itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line),  # article info.
+                        relevant_codes,                                  # countries
+                        *line[15].split(','),                            # V1.5TONE
+                        *out                                             # V2GCAM codes
+                    ]
+                    # Reshaping fields into appropriate data types
+                    row[1] = datetime.strptime(row[1], '%Y%m%d%H%M%S')
+                    row[5] = [x for x in row[5].split(';') if x] if row[5] else []
+                    row[6] = [
+                        get_loc_item(loc) for loc in row[6].split(';')
+                    ] if row[6] else []
+                    row[7] = [x for x in row[7].split(';') if x] if row[7] else []
+                    row[8] = [x for x in row[8].split(';') if x] if row[8] else []
+                    # Convert 'row' from list to tuple for psycopg2 function
+                    processed.append(tuple(row))
+                
+                if len(processed) > 0:
+                    write_processed_to_db(processed)
+                    
+        return True
+    except:
+        return None
     
 
 if __name__ == '__main__':
@@ -216,12 +222,10 @@ if __name__ == '__main__':
     print(f"Processing up to {len(gkg_files)} files.")
     
     start = datetime.now()
-    # for f in gkg_files[:100]: 
-    #     process_gkg(f, countries_of_interest)
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         processed = list(
-            executor.map(process_gkg, gkg_files[:100],
-                         repeat(countries_of_interest))
+            executor.map(process_gkg, gkg_files, repeat(countries_of_interest))
         )
+    num_processed = sum([x for x in processed if x])  # filter out None
     print(f"Actually processed {sum(processed)} files. Time taken:", 
           datetime.now() - start)
