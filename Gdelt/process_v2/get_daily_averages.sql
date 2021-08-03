@@ -1,24 +1,39 @@
+-- NB: doesn't adjust for articles syndicated between countries of interest
 SELECT
-  date, country,
-  CASE
-    WHEN country = 'AS' then source_name LIKE '%.au%'
-    ELSE source_name LIKE '%.' || LOWER(country) || '%'
-  END as from_onshore,  -- to weight onshore vs offshore articles differently
-  AVG(tone) as tone
+  date, country, from_onshore,
+  AVG(tone) as avg_tone
 FROM
   (
+    -- Combine (intra-country) syndicated articles into one row
     SELECT
-      DATE(datetime) as date, UNNEST(countries) as country,
-      source_name,
+      DATE(datetime) as date, country,
+      from_onshore,
       AVG(tone) as tone,
       pos, neg, wc
     FROM
-      gdelt_raw
+      (
+        -- Construct "from_onshore"
+        SELECT
+          *,
+          CASE
+            WHEN country = 'AS' then source_name LIKE '%.au%'
+            ELSE source_name LIKE '%.' || LOWER(country) || '%'
+          END as from_onshore
+        FROM
+          (
+            -- Expand "countries"
+            SELECT
+              *, UNNEST(countries) as country
+            FROM
+              gdelt_raw
+            WHERE DATE(datetime) > '2021-07-26'  -- REMOVE (for testing)
+          ) t1
+      ) t2
     GROUP BY
-      date, country,
-      source_name,
+      date,
+      country, from_onshore,
       pos, neg, wc  -- to control for syndication
-  ) t1
+  ) t3
 GROUP BY
   date, country, from_onshore
 ORDER BY
