@@ -1,3 +1,22 @@
+-- TODO:
+-- 1) How to loop through sets of low-level themes (housing, unemployment etc.)
+--    to construct collection of high-level theme indicators???
+-- 2) Could the low-level themes be passed in from external file via bash
+--    script (or is this unnecessarily complicated)? The thinking would be that
+--    these low-level themes are generated using Python and could be updated in
+--    the future, and hardcoding in SQL script seems error-prone.
+
+CREATE OR REPLACE FUNCTION array_intersect(anyarray, anyarray)
+  RETURNS anyarray
+  language sql
+as $FUNCTION$
+    SELECT ARRAY(
+        SELECT UNNEST($1)
+        INTERSECT
+        SELECT UNNEST($2)
+    );
+$FUNCTION$;
+
 -- Average number of themes per day
 /*
 SELECT
@@ -83,45 +102,60 @@ WITH themes_ref AS (
   AS
     housing
 )
+-- Get average tone of unique articles;
+-- Continue calculating additional info. eg "num_unique_articles"
 SELECT
-  date, AVG(tone) as tone,
-  COUNT(prop_relevant_themes > 0.1) as relevant_articles,
-  SUM(num_articles) as num_articles
+  date, country, from_onshore,
+  AVG(tone) as avg_tone,
+  SUM(num_unique_articles) as num_unique_articles,
+  COUNT(*) as num_unique_articles_relevant,
+  AVG(num_themes) as avg_num_themes,
+  AVG(num_relevant_themes) as avg_num_relevant_themes
 FROM
   (
-  -- Calculate prop_relevant_themes
-  SELECT
-    *,
-    CASE
-      WHEN num_themes = 0 then 0.0
-      ELSE 1.0 * num_relevant_themes / num_themes
-    END as prop_relevant_themes
-  FROM
-    (
-      -- Calculate num_themes and num_relevant_themes *for each unique article*
-      SELECT
-        DATE(datetime) as date, AVG(tone) as tone,
-        --UNNEST(countries) as country, source_name,
-        COUNT(gkg_id) as num_articles,
-        AVG(CARDINALITY(themes)) as num_themes,
-        AVG(CARDINALITY(array_intersect(
-          themes_ref.housing,
-          themes
-        ))) as num_relevant_themes
-      FROM
-        gdelt_raw, themes_ref
-      WHERE DATE(datetime) > '2021-07-26' -- REMOVE
-      GROUP BY
-        date,
-        --country, source_name,
-        pos, neg, wc  -- to control for syndication
-    ) t1
-  ) t2
-WHERE
-  --prop_relevant_themes > 0.1
-  (num_themes > 0 AND 1.0 * num_relevant_themes / num_themes > 0.1)
+    -- Combine (intra-country) syndicated articles into one row;
+    -- Begin calculating additional info. eg "num_unique_articles"
+    SELECT
+      DATE(datetime) as date, country, from_onshore,
+      AVG(tone) as tone,
+      COUNT(*) as num_unique_articles,
+      AVG(num_themes) as num_themes,
+      AVG(num_relevant_themes) as num_relevant_themes
+    FROM
+      (
+        -- Construct "from_onshore"; Filter by prop. of themes that are relevant
+        SELECT
+          *,
+          CASE
+            WHEN country = 'AS' then source_name LIKE '%.au%'
+            ELSE source_name LIKE '%.' || LOWER(country) || '%'
+          END as from_onshore
+        FROM
+          (
+            -- Expand "countries"; Construct "num_themes", "num_relevant_themes"
+            SELECT
+              *,
+              UNNEST(countries) as country,
+              CARDINALITY(themes) as num_themes,
+              CARDINALITY(array_intersect(
+                themes_ref.housing,
+                themes
+              )) as num_relevant_themes
+            FROM
+              gdelt_raw, themes_ref
+            WHERE
+              DATE(datetime) > '2021-07-26' -- FOR QUICKER TESTING
+          ) t1
+        WHERE
+          num_themes > 0 AND 1.0 * num_relevant_themes / num_themes > 0.1
+      ) t2
+    GROUP BY
+      date,
+      country, from_onshore,
+      pos, neg, wc  -- to control for syndication
+  ) t3
 GROUP BY
-  date
+  date, country, from_onshore
 ORDER BY
-  date, tone
+  date, country, from_onshore
 ;

@@ -1,15 +1,14 @@
 -- NB: doesn't adjust for articles syndicated between countries of interest
 SELECT
   date, country, from_onshore,
-  AVG(tone) as avg_tone
+  AVG(tone) as avg_tone,
+  COUNT(*) as num_articles
 FROM
   (
     -- Combine (intra-country) syndicated articles into one row
     SELECT
-      DATE(datetime) as date, country,
-      from_onshore,
-      AVG(tone) as tone,
-      pos, neg, wc
+      DATE(datetime) as date, country, from_onshore,
+      AVG(tone) as tone
     FROM
       (
         -- Construct "from_onshore"
@@ -26,7 +25,7 @@ FROM
               *, UNNEST(countries) as country
             FROM
               gdelt_raw
-            WHERE DATE(datetime) > '2021-07-26'  -- REMOVE (for testing)
+            WHERE DATE(datetime) > '2021-07-26'  -- FOR QUICKER TESTING
           ) t1
       ) t2
     GROUP BY
