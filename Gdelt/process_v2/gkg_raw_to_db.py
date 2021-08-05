@@ -34,25 +34,35 @@ CONNECTION_DETAILS = (
 )
 
 
-def check_dt_in_db(datetime):
-    """Returns boolean indicating whether the database contains any rows with 
-    the given datetime (format=YYYYmmddHHMMSS; 14-long bigint)
+def get_dts_in_db():
+    """Returns list of datetime-strings already in the database.
     """
-    exists_query = f"""
-    SELECT exists 
-    (SELECT 1 FROM gdelt_raw WHERE datetime = '{datetime}' LIMIT 1)
+    all_dt_query = """
+    SELECT DISTINCT datetime FROM gdelt_raw
     """
     with psycopg2.connect(CONNECTION_DETAILS) as conn:
         with conn.cursor() as cur:
             try:
-                cur.execute(exists_query)
-                dt_in_db = cur.fetchone()[0]
+                cur.execute(all_dt_query)
+                dts_in_db = cur.fetchall()
             except Exception as e:
                 print(f"Exception executing Select Query: {e}")
                 print(f"Exception type: {type(e)}")
     
-    return dt_in_db
+    dt_strs = [x[0].strftime("%Y%m%d%H%M%S") for x in dts_in_db]
+    return dt_strs
 
+
+def filter_gkg_files(gkg_files):
+    already_processed_dts = get_dts_in_db()
+    filtered = [
+        f_url for f_url in gkg_files
+        if re.search(
+            r'(\d{14}).gkg.csv.zip$', f_url
+        ).group(1) not in already_processed_dts
+    ]
+    return filtered
+    
 
 def get_loc_item(loc_item_str):
     loc_dtypes = [int, str, str, str, float, float, str]
@@ -104,8 +114,7 @@ def process_gkg(file_url, countries_of_interest):
     """
     Returns
     - True if processed and uploaded to DB successfully
-    - False if contents of raw file is already in DB
-    - None if Exception thrown
+    - False if Exception thrown
     """
     codes = [
         'c3.1', 'c3.2',
@@ -117,17 +126,9 @@ def process_gkg(file_url, countries_of_interest):
     ]
     codes_l = len(codes)
     
-    processed = []
-    filename = file_url.split('/')[-1][:-4]
-    file_datetime = datetime.strptime(
-        re.match(r'(\d{14}).gkg.csv', filename).group(1),
-        '%Y%m%d%H%M%S'
-    )
-    if check_dt_in_db(file_datetime):
-        # database already has rows with datetime matching this raw GKG file
-        return False
-    print(filename)
+    print(file_url.split('/')[-1])  # filename
     r = requests.get(file_url, stream=True)
+    processed = []
     
     try:
         with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
@@ -198,7 +199,7 @@ def process_gkg(file_url, countries_of_interest):
                     
         return True
     except:
-        return None
+        return False
     
 
 if __name__ == '__main__':
@@ -219,13 +220,10 @@ if __name__ == '__main__':
     psycopg2.extensions.register_adapter(Loc_Item, Loc_Item_Adapter)
     
     gkg_files = get_gkg_files()
-    print(f"Processing up to {len(gkg_files)} files.")
+    filt_gkg_files = filter_gkg_files(gkg_files)
+    print(f"Processing up to {len(filt_gkg_files)} files.")
     
     start = datetime.now()
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        processed = list(
-            executor.map(process_gkg, gkg_files, repeat(countries_of_interest))
-        )
-    num_processed = sum([x for x in processed if x])  # filter out None
-    print(f"Actually processed {sum(processed)} files. Time taken:", 
-          datetime.now() - start)
+        executor.map(process_gkg, filt_gkg_files, repeat(countries_of_interest))
+    print("Time taken:", datetime.now() - start)
