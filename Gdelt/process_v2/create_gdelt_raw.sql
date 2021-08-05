@@ -1,6 +1,3 @@
-DROP TABLE IF EXISTS gdelt_raw;
-DROP TYPE IF EXISTS location_item;
-
 CREATE TYPE location_item AS (
     type         INTEGER,
     full_name    TEXT,
