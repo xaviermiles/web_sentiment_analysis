@@ -126,7 +126,8 @@ def process_gkg(file_url, countries_of_interest):
     ]
     codes_l = len(codes)
     
-    print(file_url.split('/')[-1])  # filename
+    filename = file_url.split('/')[-1][:-4]
+    print(filename)
     r = requests.get(file_url, stream=True)
     processed = []
     
@@ -198,7 +199,8 @@ def process_gkg(file_url, countries_of_interest):
                     write_processed_to_db(processed)
                     
         return True
-    except:
+    except Exception as e:
+        print(f"{filename} EXCEPTION: {e}; {type(e)}")
         return False
     
 
