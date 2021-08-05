@@ -14,7 +14,7 @@ def log(message):
     print(message)
 
 
-headers = {'Authorization': f"Bearer {twitter_config.get_app_bearer()}"}
+headers = {'Authorization': f"Bearer {twitter_config.app_bearer_token}"}
 obscure_query = "?q=axinomancy&tweet_mode=extended"
 nz_query = "?geocode=-41.29738,173.21863,1000km&tweet_mode=extended&count=100"
 # If tweet_mode=extended is not specified, response will have tweets truncated to 140 characters

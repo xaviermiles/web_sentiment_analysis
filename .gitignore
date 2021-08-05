@@ -5,7 +5,8 @@ commoncrawl/processed_ccnews/
 commoncrawl/processed_ccmain/
 commoncrawl/logs/
 
-commoncrawl/digital_economy/data/
+commoncrawl/digital_economy/data/*
+!commoncrawl/digital_economy/data/ecom_labels.json
 commoncrawl/digital_economy/results/
 commoncrawl/digital_economy/plots/
 commoncrawl/digital_economy/site_agg_output/
