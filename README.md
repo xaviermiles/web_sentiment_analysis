@@ -1,13 +1,13 @@
-# COVID19 SENTIMENT ANALYSIS DOCS
+# Sentiment Analysis
 
 The aim of this overarching project was to use public datasets to derive indicators of "sentiment" for New Zealand and other countries. The sub-projects focus on different datasets.
 
 **Read Setup section before running code.**
 
 ---
-## Table of Contents
+## Contents:
 1. Sub-projects
-2. Config files
+2. Setup
 3. Explainer: Hedonometer
 ---
 
@@ -16,8 +16,8 @@ The aim of this overarching project was to use public datasets to derive indicat
 
 - commoncrawl - dataset that contains a large collection (ie. raw HTML) of scraped webpages from all over the web. The specific websites/pages collected are generated through a random crawling process and not meant to be exhaustive [of the entire web]. This is supported by AWS (possibly financially) and so is designed to integrate well with specific AWS tools.
 - GDELT - dataset that contains a variety of sentiment scores for each online news article around the world (ie. does not contain . This aims to be very exhaustive of all online news articles, but has better coverage for countries that mostly speak English.
-- GNH - 
-- twitter - exploration of Twitter API. Hedonometer (see next section) and GNH are both sentiment indicators derived from Twitter data, so the aim of sourcing the raw data would be to try custom/different sentiment analysis techniques.
+- GNH - dataset that indicates daily public sentiment and is constructed from tweets.
+- twitter - exploration of Twitter API. Hedonometer (Section 3) and GNH are both sentiment indicators derived from Twitter data, so the aim of sourcing the raw data would be to try custom/different sentiment analysis techniques.
 
 
 ## 2. Setup

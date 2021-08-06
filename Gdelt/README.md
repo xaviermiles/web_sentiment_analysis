@@ -2,7 +2,7 @@
 The GDELT (Global Database of Events, Language and Tone) website provides the Global Knowledge Graph (GKG), Global Entity Graph (GEG) and various other databases related to global news coverage.
 
 ---
-Contents:
+## Contents:
 1. Background: Global Knowledge Graph
 2. Overview of files/subdirectories
 3. Extra: Global Entity Graph

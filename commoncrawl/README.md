@@ -4,7 +4,7 @@ This is a Amazon dataset hosted in a public S3 bucket, but can also be retrieved
 The original aim was to extract the scraped webpages from New Zealand websites and apply sentiment analysis to the text to get an indication of online New Zealand sentiment over time.
 
 ---
-Contents:
+## Contents:
 1. CC-MAIN dataset structure
 2. Overview of files/subdirectories
 3. Explainer: retrieving CC-MAIN
