@@ -79,6 +79,9 @@ def write_themes_mappings_to_db(theme_mappings):
         f"host={postgres_config.HOST} dbname=gdelt user=postgres "
         f"password={postgres_config.PASSWORD}"
     )
+    # Add row to get overall indicator:
+    theme_mappings = ['ALL', []] + themes_mappings
+    
     with psycopg2.connect(connection_details) as conn:
         with conn.cursor() as cur:
             cur.execute(create_table_query)

@@ -1,10 +1,7 @@
--- TODO:
--- 1) How to loop through sets of low-level themes (housing, unemployment etc.)
---    to construct collection of high-level theme indicators???
--- 2) Could the low-level themes be passed in from external file via bash
---    script (or is this unnecessarily complicated)? The thinking would be that
---    these low-level themes are generated using Python and could be updated in
---    the future, and hardcoding in SQL script seems error-prone.
+/*
+Working towards theme-specific sentiment
+The output will depend on gdelt_raw AND themes_ref tables
+*/
 
 CREATE OR REPLACE FUNCTION array_intersect(anyarray, anyarray)
   RETURNS anyarray
@@ -82,6 +79,7 @@ ORDER BY
 
 -- Previous, but controlling for syndication and determining onshore/offshore
 -- WORK IN PROGRESS*****************************
+/*
 WITH themes_ref AS (
   SELECT
     ARRAY[
@@ -143,8 +141,7 @@ FROM
               )) as num_relevant_themes
             FROM
               gdelt_raw, themes_ref
-            WHERE
-              DATE(datetime) > '2021-07-26' -- FOR QUICKER TESTING
+            WHERE DATE(datetime) > '2021-07-26' -- FOR QUICKER TESTING
           ) t1
         WHERE
           num_themes > 0 AND 1.0 * num_relevant_themes / num_themes > 0.1
@@ -158,4 +155,43 @@ GROUP BY
   date, country, from_onshore
 ORDER BY
   date, country, from_onshore
+;
+*/
+
+-- Daily average tone, looping through sets of high/low-level themes
+SELECT
+  date,
+  ref_high_level as theme,
+  AVG(tone) as avg_tone,
+  COUNT(*) as num_relevant_articles
+FROM
+  (
+    -- Calculate num_themes and num_relevant_themes (for each theme)
+    SELECT
+      DATE(datetime) as date,
+      ref_high_level,
+      tone,
+      CARDINALITY(themes) as num_themes,
+      CARDINALITY(array_intersect(
+        ref_low_levels, theme
+      )) as num_relevant_themes
+    FROM
+      (
+        -- Take all combinations of gdelt_raw and high/low themes
+        SELECT
+          gdelt_raw.*,
+          themes_ref.high_level as ref_high_level,
+          themes_ref.low_levels as ref_low_levels
+        FROM
+          gdelt_raw, themes_ref
+        WHERE
+          DATE(gdelt_raw.datetime) > '2021-07-01'  -- FOR QUICKER TESTING
+      ) gdelt_raw_w_themes
+  ) t2
+WHERE
+  num_themes > 0 AND 1.0 * num_relevant_themes / num_themes > 0.1
+GROUP BY
+  date, theme
+ORDER BY
+  date, theme
 ;
