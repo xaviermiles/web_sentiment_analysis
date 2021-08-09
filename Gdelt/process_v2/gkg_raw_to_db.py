@@ -112,6 +112,17 @@ def write_processed_to_db(processed):
 
 def process_gkg(file_url, countries_of_interest):
     """
+    NOTE:
+    Some raw data files seem to have corrupted/non-unique GKGRECORDID field,
+    which means that it cannot be INSERTed into the database since the db uses
+    this field as PRIMARY KEY. To avoid this, the ID field is constructed from
+    scratch for all relevant articles.
+    
+     Examples of datetimes for which the raw data files have this bug/quirk:
+        20150219101500
+        20150219093000
+        20150219003000
+    
     Returns
     - True if processed and uploaded to DB successfully
     - False if Exception thrown
@@ -128,13 +139,16 @@ def process_gkg(file_url, countries_of_interest):
     
     filename = file_url.split('/')[-1][:-4]
     print(filename)
+    filename_dt = re.search(r'(\d{14}).gkg.csv$', filename).group(1)
+    id_regex_str = filename_dt + r'-(T?\d+)'
+    
     r = requests.get(file_url, stream=True)
     processed = []
     
     try:
         with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
             with zf.open(filename, 'r') as infile:
-                for raw in io.TextIOWrapper(infile, encoding='latin-1'):
+                for article_num, raw in enumerate(io.TextIOWrapper(infile, encoding='latin-1')):
                     line = raw.split('\t')
                     if len(line) < 10: continue
     
@@ -176,13 +190,24 @@ def process_gkg(file_url, countries_of_interest):
     
                     if (len(codes) == len(out) + 1): 
                         out.append(None)
-    
+                    
+                    # Construct ID field. 'T' in ID suffix should be preserved, 
+                    # as it indicates if an article is translated.
+                    raw_id = line[0]
+                    relevant_ids.append(raw_id)
+                    raw_id_suffix = re.search(id_regex_str, raw_id).group(1)
+                    synthetic_gkg_id = (
+                        f"{filename_dt}-T{article_num}" 
+                        if raw_id_suffix.startswith('T')
+                        else f"{filename_dt}-{article_num}"
+                    )
                     # Construct row for database table
                     row = [
-                        *itemgetter(0, 1, 2, 3, 4, 7, 9, 11, 13)(line),  # article info.
-                        relevant_codes,                                  # countries
-                        *line[15].split(','),                            # V1.5TONE
-                        *out                                             # V2GCAM codes
+                        synthetic_gkg_id,
+                        *itemgetter(1,2,3,4,7,9,11,13)(line),  # article info.
+                        relevant_codes,                        # country codes
+                        *line[15].split(','),                  # V1.5TONE
+                        *out                                   # V2GCAM codes
                     ]
                     # Reshaping fields into appropriate data types
                     row[1] = datetime.strptime(row[1], '%Y%m%d%H%M%S')
@@ -197,7 +222,7 @@ def process_gkg(file_url, countries_of_interest):
                 
                 if len(processed) > 0:
                     write_processed_to_db(processed)
-                    
+        
         return True
     except Exception as e:
         print(f"{filename} EXCEPTION: {e}; {type(e)}")
