@@ -1,0 +1,27 @@
+requests
+numpy
+pandas
+jupyter
+matplotlib
+seaborn
+boto3
+s3fs
+psycopg2
+
+spacy
+gensim
+scikit-learn
+lightgbm
+
+warcio
+newspaper3k
+wordcloud
+
+# Only imported in jupyter notebooks, not any scripts:
+nltk
+statsmodels
+textblob
+calplot
+swifter
+pandarallel
+fake-useragent

@@ -15,11 +15,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from more_itertools import chunked
 from wordcloud import WordCloud
-# from memory_profiler import profile
 
-import nltk
 import gensim
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, MiniBatchKMeans
