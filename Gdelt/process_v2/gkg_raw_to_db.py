@@ -194,7 +194,6 @@ def process_gkg(file_url, countries_of_interest):
                     # Construct ID field. 'T' in ID suffix should be preserved, 
                     # as it indicates if an article is translated.
                     raw_id = line[0]
-                    relevant_ids.append(raw_id)
                     raw_id_suffix = re.search(id_regex_str, raw_id).group(1)
                     synthetic_gkg_id = (
                         f"{filename_dt}-T{article_num}" 
