@@ -35,8 +35,18 @@ AS $FUNCTION$
     );
 $FUNCTION$;
 
-DROP TABLE IF EXISTS daily_tone;
+CREATE TABLE IF NOT EXISTS daily_tone (
+    date         DATE        PRIMARY KEY,
+    country      VARCHAR(2),
+    from_onshore BOOLEAN,
+    theme        TEXT,
+    avg_tone     NUMERIC,
+    num_articles INTEGER
+);
 
+-- Add average tones for dates not in output table
+-- NB: DOESN'T INCLUDE FINAL/MAX DATE AS POTENTIALLY MORE ARTICLES TO COME???
+-- Q/  CAN THIS BE CHANGED SO THAT IT ADJUSTS FOR TIMEZONES?
 SELECT date,
        country,
        from_onshore,
@@ -60,6 +70,7 @@ FROM (
                END AS from_onshore
         FROM (
             -- Expand "countries", for rows with sufficient relevant themes
+            -- and relevant dates.
             SELECT *,
                    ref_high_level AS theme,
                    Unnest(countries) AS country
@@ -79,10 +90,24 @@ FROM (
                              themes_ref.low_levels AS ref_low_levels
                       FROM   gdelt_raw,
                              themes_ref
-                      WHERE  Date(gdelt_raw.datetime) > '2021-08-01' -- FOR TESTING
+                      --WHERE  Date(gdelt_raw.datetime) > '2021-08-01' -- FOR TESTING
                 ) gdelt_raw_w_themes
-            ) t1
-            WHERE  prop_relevant_themes > 0.1  -- theme threshold
+            ) t1,
+            (
+                SELECT Date(datetime) AS min_date
+                FROM gdelt_raw
+                ORDER BY gkg_id ASC
+                LIMIT 1
+            ) min_table,
+            (
+                SELECT Date(datetime) AS max_date
+                FROM gdelt_raw
+                ORDER BY gkg_id DESC
+                LIMIT 1
+            ) max_table
+            WHERE  prop_relevant_themes > 0.1 AND  -- theme threshold
+                   date >= min_table.min_date AND date < max_table.max_date
+            EXCEPT (SELECT date FROM daily_tone WHERE avg_tone IS NOT NULL)
         ) t2
     ) t3
     GROUP  BY date,
