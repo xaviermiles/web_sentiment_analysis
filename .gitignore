@@ -33,3 +33,6 @@ __pycache__/
 
 # R
 .Rproj.user
+.Rhistory
+.RData
+.Ruserdata
