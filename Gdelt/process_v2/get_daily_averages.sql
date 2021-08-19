@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS daily_tone (
     PRIMARY KEY (date, country, from_onshore, theme)
 );
 
--- Add average tones for dates not in output table
--- NB: SHOULDN'T INCLUDE MIN/MAX DATE AS POSSIBLY INCOMPLETE???
+-- Compute average tones for dates not already in "daily_tone"
+-- NB: Doesn't include min/max dates as these are potentially incomplete.
 -- Q/  CAN/SHOULD THIS BE CHANGED SO THAT IT ADJUSTS FOR TIMEZONES?
 INSERT INTO daily_tone(date, country, from_onshore, theme, avg_tone, num_articles)
 SELECT date,
@@ -71,7 +71,6 @@ FROM (
                END AS from_onshore
         FROM (
             -- Expand "countries", for rows with sufficient relevant themes
-            -- and relevant dates.
             SELECT *,
                    ref_high_level AS theme,
                    Unnest(countries) AS country
@@ -85,13 +84,28 @@ FROM (
                           ELSE 1.0 * Cardinality(array_intersect(ref_low_levels, themes)) / Cardinality(themes)
                        END AS prop_relevant_themes
                   FROM (
-                      -- Take all combinations of gdelt_raw and high/low themes
+                      -- Take all combinations of gdelt_raw and high/low themes,
+                      -- for any 'new' dates that are not the min/max dates
                       SELECT gdelt_raw.*,
                              themes_ref.high_level AS ref_high_level,
                              themes_ref.low_levels AS ref_low_levels
                       FROM   gdelt_raw,
-                             themes_ref
-                      WHERE  Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
+                             themes_ref,
+                             (
+                                SELECT Date(datetime) AS min_date
+                                FROM gdelt_raw
+                                ORDER BY gkg_id ASC
+                                LIMIT 1
+                             ) min_table,
+                             (
+                                SELECT Date(datetime) AS max_date
+                                FROM gdelt_raw
+                                ORDER BY gkg_id DESC
+                                LIMIT 1
+                             ) max_table
+                      WHERE  Date(gdelt_raw.datetime) > min_table.min_date AND
+                             Date(gdelt_raw.datetime) < max_table.max_date AND
+                             --Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
                              NOT EXISTS (
                                 SELECT
                                 FROM daily_tone
