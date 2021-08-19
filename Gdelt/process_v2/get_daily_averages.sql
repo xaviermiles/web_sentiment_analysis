@@ -36,24 +36,25 @@ AS $FUNCTION$
 $FUNCTION$;
 
 CREATE TABLE IF NOT EXISTS daily_tone (
-    date         DATE        PRIMARY KEY,
+    date         DATE,
     country      VARCHAR(2),
     from_onshore BOOLEAN,
     theme        TEXT,
     avg_tone     NUMERIC,
-    num_articles INTEGER
+    num_articles INTEGER,
+    PRIMARY KEY (date, country, from_onshore, theme)
 );
 
 -- Add average tones for dates not in output table
--- NB: DOESN'T INCLUDE FINAL/MAX DATE AS POTENTIALLY MORE ARTICLES TO COME???
--- Q/  CAN THIS BE CHANGED SO THAT IT ADJUSTS FOR TIMEZONES?
+-- NB: SHOULDN'T INCLUDE MIN/MAX DATE AS POSSIBLY INCOMPLETE???
+-- Q/  CAN/SHOULD THIS BE CHANGED SO THAT IT ADJUSTS FOR TIMEZONES?
+INSERT INTO daily_tone(date, country, from_onshore, theme, avg_tone, num_articles)
 SELECT date,
        country,
        from_onshore,
        theme,
        Avg(tone) AS avg_tone,
        Count(*)  AS num_articles
-INTO daily_tone
 FROM (
     -- Combine (intra-country) syndicated articles into one row
     SELECT date,
@@ -90,24 +91,15 @@ FROM (
                              themes_ref.low_levels AS ref_low_levels
                       FROM   gdelt_raw,
                              themes_ref
-                      --WHERE  Date(gdelt_raw.datetime) > '2021-08-01' -- FOR TESTING
+                      WHERE  Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
+                             NOT EXISTS (
+                                SELECT
+                                FROM daily_tone
+                                WHERE date = Date(gdelt_raw.datetime)
+                             ) -- don't compute for dates already in daily_tone
                 ) gdelt_raw_w_themes
-            ) t1,
-            (
-                SELECT Date(datetime) AS min_date
-                FROM gdelt_raw
-                ORDER BY gkg_id ASC
-                LIMIT 1
-            ) min_table,
-            (
-                SELECT Date(datetime) AS max_date
-                FROM gdelt_raw
-                ORDER BY gkg_id DESC
-                LIMIT 1
-            ) max_table
-            WHERE  prop_relevant_themes > 0.1 AND  -- theme threshold
-                   date >= min_table.min_date AND date < max_table.max_date
-            EXCEPT (SELECT date FROM daily_tone WHERE avg_tone IS NOT NULL)
+            ) t1
+            WHERE  prop_relevant_themes > 0.1 -- theme threshold
         ) t2
     ) t3
     GROUP  BY date,
