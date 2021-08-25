@@ -83,34 +83,34 @@ FROM (
                           WHEN Cardinality(themes) = 0 THEN 0.0
                           ELSE 1.0 * Cardinality(array_intersect(ref_low_levels, themes)) / Cardinality(themes)
                        END AS prop_relevant_themes
-                  FROM (
-                      -- Take all combinations of gdelt_raw and high/low themes,
-                      -- for any 'new' dates that are not the min/max dates
-                      SELECT gdelt_raw.*,
-                             themes_ref.high_level AS ref_high_level,
-                             themes_ref.low_levels AS ref_low_levels
-                      FROM   gdelt_raw,
-                             themes_ref,
-                             (
-                                SELECT Date(datetime) AS min_date
-                                FROM gdelt_raw
-                                ORDER BY gkg_id ASC
-                                LIMIT 1
-                             ) min_table,
-                             (
-                                SELECT Date(datetime) AS max_date
-                                FROM gdelt_raw
-                                ORDER BY gkg_id DESC
-                                LIMIT 1
-                             ) max_table
-                      WHERE  Date(gdelt_raw.datetime) > min_table.min_date AND
-                             Date(gdelt_raw.datetime) < max_table.max_date AND
-                             --Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
-                             NOT EXISTS (
-                                SELECT
-                                FROM daily_tone
-                                WHERE date = Date(gdelt_raw.datetime)
-                             ) -- don't compute for dates already in daily_tone
+                FROM (
+                    -- Take all combinations of gdelt_raw and high/low themes,
+                    -- for any 'new' dates that are not the min/max dates
+                    SELECT gdelt_raw.*,
+                           themes_ref.high_level AS ref_high_level,
+                           themes_ref.low_levels AS ref_low_levels
+                    FROM   gdelt_raw,
+                           themes_ref,
+                           (
+                              SELECT Date(datetime) AS min_date
+                              FROM gdelt_raw
+                              ORDER BY gkg_id ASC
+                              LIMIT 1
+                           ) min_table,
+                           (
+                              SELECT Date(datetime) AS max_date
+                              FROM gdelt_raw
+                              ORDER BY gkg_id DESC
+                              LIMIT 1
+                           ) max_table
+                    WHERE  Date(gdelt_raw.datetime) > min_table.min_date AND
+                           Date(gdelt_raw.datetime) < max_table.max_date AND
+                           --Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
+                           NOT EXISTS (
+                              SELECT
+                              FROM daily_tone
+                              WHERE date = Date(gdelt_raw.datetime)
+                           ) -- don't compute for dates already in daily_tone
                 ) gdelt_raw_w_themes
             ) t1
             WHERE  prop_relevant_themes > 0.1 -- theme threshold
