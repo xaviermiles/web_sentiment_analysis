@@ -90,22 +90,8 @@ FROM (
                            themes_ref.high_level AS ref_high_level,
                            themes_ref.low_levels AS ref_low_levels
                     FROM   gdelt_raw,
-                           themes_ref,
-                           (
-                              SELECT Date(datetime) AS min_date
-                              FROM gdelt_raw
-                              ORDER BY gkg_id ASC
-                              LIMIT 1
-                           ) min_table,
-                           (
-                              SELECT Date(datetime) AS max_date
-                              FROM gdelt_raw
-                              ORDER BY gkg_id DESC
-                              LIMIT 1
-                           ) max_table
-                    WHERE  Date(gdelt_raw.datetime) > min_table.min_date AND
-                           Date(gdelt_raw.datetime) < max_table.max_date AND
-                           --Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
+                           themes_ref
+                    WHERE  --Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
                            NOT EXISTS (
                               SELECT
                               FROM daily_tone
