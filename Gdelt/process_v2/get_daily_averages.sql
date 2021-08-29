@@ -75,9 +75,9 @@ FROM (
                    ref_high_level AS theme,
                    Unnest(countries) AS country
             FROM (
-                -- Calculate proportion of relevant themes (for each theme)
+                -- Calculate proportion of relevant themes, for any date+theme
+                -- combinations not already calculated
                 SELECT *,
-                       Date(datetime) AS date,
                        CASE
                           WHEN ref_high_level = 'ALL' THEN 1.0
                           WHEN Cardinality(themes) = 0 THEN 0.0
@@ -85,8 +85,9 @@ FROM (
                        END AS prop_relevant_themes
                 FROM (
                     -- Take all combinations of gdelt_raw and high/low themes,
-                    -- for any 'new' dates that are not the min/max dates
+                    -- for any dates not the min/max
                     SELECT gdelt_raw.*,
+                           Date(gdelt_raw.datetime) as date,
                            themes_ref.high_level AS ref_high_level,
                            themes_ref.low_levels AS ref_low_levels
                     FROM   gdelt_raw,
@@ -96,22 +97,22 @@ FROM (
                               FROM gdelt_raw
                               ORDER BY gkg_id ASC
                               LIMIT 1
-                           ) min_table,
+                           ) g_r_min,
                            (
                               SELECT Date(datetime) AS max_date
                               FROM gdelt_raw
                               ORDER BY gkg_id DESC
                               LIMIT 1
-                           ) max_table
-                    WHERE  Date(gdelt_raw.datetime) > min_table.min_date AND
-                           Date(gdelt_raw.datetime) < max_table.max_date AND
-                           --Date(gdelt_raw.datetime) >= '2021-08-01' AND -- FOR TESTING
-                           NOT EXISTS (
-                              SELECT
-                              FROM daily_tone
-                              WHERE date = Date(gdelt_raw.datetime)
-                           ) -- don't compute for dates already in daily_tone
+                           ) g_r_max
+                    WHERE --Date(gdelt_raw.datetime) >= '2021-08-16' AND -- FOR TESTING
+                          Date(gdelt_raw.datetime) > g_r_min.min_date AND
+                          Date(gdelt_raw.datetime) < g_r_max.max_date
                 ) gdelt_raw_w_themes
+                WHERE NOT EXISTS (
+                          SELECT FROM daily_tone
+                          WHERE date = gdelt_raw_w_themes.date AND
+                                theme = gdelt_raw_w_themes.ref_high_level
+                      )
             ) t1
             WHERE  prop_relevant_themes > 0.1 -- theme threshold
         ) t2
