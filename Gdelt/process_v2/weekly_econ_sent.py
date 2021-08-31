@@ -14,7 +14,7 @@ CONNECTION_DETAILS = (
 )
 
 
-def reconstruct_econ_themes():
+def make_economic_theme():
     """
     Identifies which low-level themes are related to "economics" using 
     simple-string searching, which identifies which low-level themes include

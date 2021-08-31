@@ -5,7 +5,8 @@ The GDELT (Global Database of Events, Language and Tone) website provides the Gl
 ## Contents:
 1. Background: Global Knowledge Graph
 2. Overview of files/subdirectories
-3. Extra: Global Entity Graph
+3. Process to get Daily Tone
+4. Extra: Global Entity Graph
 ---
 
 
@@ -77,8 +78,6 @@ Gdelt
 │   │
 │   └── swa_insights.ipynb
 │
-├── Gdelt_swa/
-│
 ├── quality_checks
 │   ├── __init__.py
 │   └── compare_indicators.ipynb
@@ -88,8 +87,9 @@ Gdelt
     ├── create_gdelt_raw.sql
     ├── gkg_raw_to_db.py
     │
-    ├── get_daily_averages.sql
-    └── themes_queries.sql
+    ├── create_themes_ref.sql
+    ├── weekly_econ_sent.py
+    └── get_daily_averages.sql
 ```
 
 The _gkg_gdelt2_process.py_ script was inherited from someone who had previously worked to download a subset of this dataset from the raw data files, into a collection of CSVs. The _gdelt_utils.py_ defines constants that are the headers of the output files from this original processing script.
@@ -100,17 +100,22 @@ The _themes_NLP_SWA.ipynb_ notebook was used to get low-level themes related to 
 The five python scripts in _swa/_ comprise a full process to download the GDELT data for multiple countries, merge the output CSVs, aggregate the sentiment to monthly, filter the news articles based on themes mentioned, and calculate rolling averages and standard deviations. This process uses a S3 bucket to store CSVs and what each of the five python script does are explained in _swa/setup_process.md_.
 The _swa_insights.ipynb_ notebook was used to get insights and plots after the monthly per-country data was collated.
 
-TODO: explainer about _Gdelt_swa/_
-
 The _quality_checks/compare_indicators.ipynb_ notebook was used to generate plots and perform statistical hypothesis testing related to trying to verify the quality of the sentiment indicator derived from GDELT.
 
-The _process_v2/_ aimed to replicate the process in _swa/_, but with using a Postgres database (AWS RDS) as storage rather than CSVs in S3 bucket. This process also attempts to prevent any syndicated/republished news articles being counted towards the averages multiple times by first grouping together any articles with the same date, positive score, negative score, and word count.
-The database table is created by _create_gdelt_raw.sql_, and the data is downloaded and inserted into the table by _gkg_raw_to_db.py_.
-The SELECT query in _get_daily_averages.sql_ can be used to get daily per-country sentiment from the raw table, which is also broken down by whether the article was published in the country or overseas.
-The SELECT queries in _themes_queries.sql_ work towards deriving the daily theme-specific sentiment from the raw table (while still breaking down by country mentioned and country of origin, and controlling for syndication).
+The _process_v2/_ aimed to replicate the process in _swa/_, but using a Postgres database (AWS RDS) as storage rather than CSVs in a S3 bucket. It also had some additional data corrections/adjustments. These files are explained in Section 3.
 
 
-## 3. Extra: Global Entity Graph
+## 3. Process to get Daily Tone
+The source data is retrieved via HTTP links and transformed into what is referred to as the "raw" data. The schema for the database table which holds this raw GDELT data is in _create_gdelt_raw.sql_. Running the Python script _gkg_raw_to_db.py_ will download any __new__ source data, transform this data, and then upload the resulting raw data to the "gdelt_raw" database table.
+
+The INSERT query in _get_daily_averages.sql_ constructs daily per-country, per-theme sentiment from the "raw" table, which is also broken down by whether the article was published in the country or overseas, and inserts this information into the "daily_tone" table. (The schema for "daily_tone" is included in the same file.)
+- This query attempts to prevent any syndicated/republished news articles being counted towards the averages multiple times. It achieves this by grouping together any articles with the same date, positive score, negative score, and word count, and then creating averages from the remaining rows.
+- This query perform daily tone calculations for each of the high-level themes (eg. economic, housing) in the "themes_ref" table. This table provides mappings from low-level to high-level themes (and vice-versa). This table is created by running _create_themes_ref.py_. However, the "economic" theme is created using the _make_economic_theme_ function in _weekly_econ_sent.py_ since this mapping is derived using a different process.
+
+The _export_nz_econ_sent_ function in _weekly_econ_sent.py_ will extract the daily economic sentiment from "daily_tone" table, aggregate this to weekly averages, and save this to a CSV (ready to be used for the COVID-19 Data Portal). This code treats a week as Sunday - Saturday and dates the week as the Saturday (final day), and omits any partial weeks at the start/end of the daily averages.
+
+
+## 4. Extra: Global Entity Graph
 ### What is GEG?
 The Global Entity Graph (GEG) is a dataset developed by GDELT more recently than GKG but serves a very similar purpose. GEG uses Google’s Cloud Natural Language API to evaluate and quantify sentiment within news articles. The sentiments/tones included in GKG (both V1.5TONE and V2GCAM) are measured through “classical grammatical, statistical and machine learning algorithms”. This means that GEG and GKG both provide measures of sentiment within global news articles and differ in their process to derive sentiment.
 
