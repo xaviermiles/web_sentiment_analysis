@@ -32,8 +32,8 @@ def make_economic_theme():
                          'CORONA','COVID','FINANC','MARKET']
     lookup = pd.read_csv("../data/LOOKUP-GKGTHEMES.csv", sep = "\t")
     low_level_themes = [
-        theme_i if any(substr in theme_i for substr in substrs_to_search)
-        for themes_i in lookup['theme']
+        theme_i for theme_i in lookup['theme']
+        if any(substr in theme_i for substr in substrs_to_search)*
     ]
     row = ('economic', low_level_themes)
     insert_query = f"INSERT INTO themes_ref VALUES %s;"
