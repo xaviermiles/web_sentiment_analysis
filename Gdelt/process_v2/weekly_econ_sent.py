@@ -33,7 +33,7 @@ def make_economic_theme():
     lookup = pd.read_csv("../data/LOOKUP-GKGTHEMES.csv", sep = "\t")
     low_level_themes = [
         theme_i for theme_i in lookup['theme']
-        if any(substr in theme_i for substr in substrs_to_search)*
+        if any(substr in theme_i for substr in substrs_to_search)
     ]
     row = ('economic', low_level_themes)
     insert_query = f"INSERT INTO themes_ref VALUES %s;"
@@ -86,3 +86,7 @@ def export_nz_econ_sent():
     # num_articles column not needed for portal
     # weekly_econ = weekly_econ.drop('num_articles', axis=1)
     weekly_econ.to_csv("../data/nz_weekly_econ_sentiment.csv")
+
+
+if __name__ == "__main__":
+    export_nz_econ_sent()
