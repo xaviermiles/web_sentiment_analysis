@@ -65,26 +65,24 @@ def export_nz_econ_sent():
     # so will use num_articles column to work backwards to a simple average of
     # all articles which mention NZ.
     econ['num_articles_weights'] = (
-      econ['num_articles'] / 
+      econ['num_articles'] /
       econ.groupby('date')['num_articles'].transform('sum')
     )
     econ['weighted_avg_tone'] = econ['avg_tone'] * econ['num_articles_weights']
     simple_econ = econ.groupby('date') \
-                      .agg({'weighted_avg_tone': 'sum', 
+                      .agg({'weighted_avg_tone': 'sum',
                             'num_articles': 'sum'}) \
                       .rename({'weighted_avg_tone': 'avg_tone'}, axis=1)
     simple_econ.to_csv("../data/nz_daily_econ_sentiment.csv")
     
     # Aggregate to weekly - remove partial weeks at start/end
     idx_first_sunday = list(simple_econ.index.day_name()).index('Sunday')
-    idx_last_sunday = len(simple_econ.index) - 1 - list(simple_econ.index.day_name()[::-1]).index('Sunday')
-    filt_simple_econ = simple_econ.iloc[idx_first_sunday:idx_last_sunday]
+    idx_last_saturday = len(simple_econ.index) - list(simple_econ.index.day_name()[::-1]).index('Saturday')
+    filt_simple_econ = simple_econ.iloc[idx_first_sunday:idx_last_saturday]
     
     weekly_econ = filt_simple_econ.resample('W-Sat') \
                                   .agg({'avg_tone': 'mean', 
                                         'num_articles': 'sum'})
-    # num_articles column not needed for portal
-    # weekly_econ = weekly_econ.drop('num_articles', axis=1)
     weekly_econ.to_csv("../data/nz_weekly_econ_sentiment.csv")
 
 
